@@ -1,0 +1,6 @@
+.env
+*.ckpt
+*.wav
+*.pyc
+*.bin
+/pretrained_models
