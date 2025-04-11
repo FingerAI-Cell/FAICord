@@ -3,6 +3,5 @@
 *.wav
 *.pyc
 *.bin
-/pretrained_models
 *.npy
 *.rttm
