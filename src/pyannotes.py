@@ -3,10 +3,13 @@ from pyannote.audio import Pipeline
 from pyannote.audio import Model 
 from pyannote.audio import Audio
 from pyannote.core import Segment
+from pydub import AudioSegment
 from pathlib import Path
+from io import BytesIO
 import numpy as np 
-import torch
+import torchaudio
 import random
+import torch
 import os
 
 class Pyannot:
@@ -51,8 +54,16 @@ class PyannotVAD(Pyannot):
         super().__init__()
 
     def get_vad_timestamp(self, pipeline, audio_file):
-        import torchaudio
-        waveform, sample_rate = torchaudio.load(audio_file)
+        if isinstance(audio_file, AudioSegment):
+            buffer = BytesIO()
+            audio_file.export(buffer, format="wav")
+            buffer.seek(0)
+            waveform, sample_rate = torchaudio.load(buffer)
+        elif isinstance(audio_file, (str, bytes, os.PathLike)):
+            waveform, sample_rate = torchaudio.load(audio_file)
+        else:
+            raise TypeError("지원되지 않는 오디오 형식입니다.")
+
         audio_in_memory = {"waveform": waveform, "sample_rate": sample_rate}
         vad_result = pipeline(audio_in_memory)
 
@@ -68,17 +79,43 @@ class PyannotDIAR(Pyannot):
   
     def get_diar_result(self, pipeline, audio_file, num_speakers=None, return_embeddings=False):
         diarization = pipeline(audio_file, num_speakers=num_speakers, return_embeddings=return_embeddings)
+        diar_result = []
+        embeddings = None 
         if return_embeddings == False:
-            diar_result = []
             for segment, _, speaker in diarization.itertracks(yield_label=True):
                 start_time = segment.start 
                 end_time = segment.end
                 duration = end_time - start_time 
                 if duration >= 0.7:
                     diar_result.append([(start_time, end_time), speaker])
-            return diar_result
         else:
-            return diarization
+            embeddings = diarization[1]
+            for segment, _, speaker in diarization[0].itertracks(yield_label=True):
+                start_time, end_time = segment.start, segment.end 
+                duration = end_time - start_time 
+                if duration >= 0.7:
+                    diar_result.append([(start_time, end_time), speaker])
+        return diar_result, embeddings
+
+    def save_as_rttm(self, diar_result, output_rttm_path=None, file_name=None):
+        '''
+        rttm: SPEAKER <file-id> <channel> <start-time> <duration> <NA> <NA> <speaker-id> <NA> <NA>
+        '''
+        with open(output_rttm_path, "w") as f:
+            for (start_time, end_time), speaker in diar_result:
+                duration = end_time - start_time
+                rttm_line = f"SPEAKER {file_name} 1 {start_time:.3f} {duration:.3f} <NA> <NA> {speaker} <NA> <NA>\n"
+                f.write(rttm_line)
+
+    def save_as_emb(self, embeddings, output_emb_path=None):
+        import numpy as np 
+        np.save(output_emb_path, embeddings)
+
+    def load_emb_npy(self, npy_emb_path=None):
+        if npy_emb_path is None:
+            raise ValueError("npy_emb_path must be specified.")
+        embeddings = np.load(npy_emb_path)
+        return embeddings
 
 
 class PyannotOSD(Pyannot):   # Overlap Speech Detection
