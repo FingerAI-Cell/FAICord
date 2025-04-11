@@ -1,4 +1,3 @@
-
 from scipy.spatial.distance import cdist
 from pydub import AudioSegment
 from io import BytesIO
@@ -52,7 +51,12 @@ class AudioFileProcessor:
         if isinstance(audio_file, BytesIO):
             audio_file.seek(0)
             audio_file = AudioSegment.from_file(audio_file, format="wav")
+        elif isinstance(audio_file, str):
+            audio_file = AudioSegment.from_file(audio_file)
 
+        if chunk_length is None:
+            return [audio_file]
+        
         if isinstance(audio_file, AudioSegment):
             chunk_length_ms = chunk_length * 1000
             chunks = [audio_file[i:i + chunk_length_ms] for i in range(0, len(audio_file), chunk_length_ms)]
