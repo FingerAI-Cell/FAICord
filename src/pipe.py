@@ -96,7 +96,7 @@ class STTPipe(BasePipeline):
             texts += seg.text + " "
         return texts 
 
-    def postprocess_result(self, segments, no_speech_prob=0.9, temperature=0.2, file_name=None):
+    def postprocess_result(self, stt_result, no_speech_prob=0.9, temperature=0.5, file_name=None):
         '''
         extract text from segments  + apply word dictionary 
         '''
@@ -104,7 +104,7 @@ class STTPipe(BasePipeline):
             'no_speech_prob': no_speech_prob,
             'temperature': temperature
         }
-        for seg in segments: 
+        for seg in stt_result: 
             seg.text = self.stt_model.extract_text(seg, text_filter=text_filter)
         
         if file_name != None: 
