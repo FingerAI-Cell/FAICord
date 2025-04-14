@@ -1,7 +1,7 @@
-from src import NoiseHandler, VoiceEnhancer, AudioFileProcessor, AudioVisualizer
-from src import PyannotDIAR, PyannotVAD
-from src import SBEMB
-from src import WhisperSTT
+from .audio_handler import NoiseHandler, VoiceEnhancer, AudioVisualizer
+from .preprocessors import AudioFileProcessor
+from .pyannotes import PyannotDIAR, PyannotVAD
+from .speechbrains import SBEMB 
 from abc import abstractmethod
 from pydub import AudioSegment
 from io import BytesIO
