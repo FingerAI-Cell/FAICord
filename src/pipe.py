@@ -96,7 +96,7 @@ class STTPipe(BasePipeline):
             texts += seg.text + " "
         return texts 
 
-    def postprocess_result(self, segments, no_speech_prob=0.9, temperature=0.5, file_name=None):
+    def postprocess_result(self, segments, no_speech_prob=0.9, temperature=0.2, file_name=None):
         '''
         extract text from segments  + apply word dictionary 
         '''
