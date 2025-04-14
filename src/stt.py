@@ -64,7 +64,8 @@ class WhisperSTT(STTModule):
                 )
             os.remove(temp_audio_file.name)
         segments = transcription.segments
+        # print(segments)
         for segment in segments:
             segment.text = segment.text.strip()
             segment.text = self.apply_word_dictionary(segment.text, self.word_dict) + " "
-        return segment
+        return segments
