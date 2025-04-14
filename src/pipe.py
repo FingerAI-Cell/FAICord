@@ -1,7 +1,7 @@
-from src import NoiseHandler, VoiceEnhancer, AudioFileProcessor, AudioVisualizer
-from src import PyannotDIAR, PyannotVAD
-from src import SBEMB
-from src import WhisperSTT
+from .preprocessors import AudioFileProcessor
+from .audio_handler import NoiseHandler, VoiceEnhancer, AudioVisualizer
+from .pyannotes import PyannotVAD
+from .stt import WhisperSTT
 from abc import abstractmethod
 from pydub import AudioSegment
 from io import BytesIO
@@ -61,6 +61,32 @@ class VADPipe(BasePipeline):
         return vad_timestamp
 
 
+class STTPipe(BasePipeline):
+    def set_env(self, whisper_api, generation_config):
+        self.audio_processor = AudioFileProcessor()
+        self.stt_model = WhisperSTT(whisper_api, generation_config)
+
+    def chunk_audio(self, audio_file, chunk_length=None, start_time=None, end_time=None):
+        return self.audio_processor.chunk_audio(audio_file, chunk_length, start_time, end_time)
+
+    def transcribe_text(self, audio_file, vad_result=None, chunk_length=270, transcribe_type='api'):
+        '''
+
+        '''
+        whisper_audio = self.stt_model.prepare_whisper_audio(audio_file)
+        results = []
+        if transcribe_type == 'api' and vad_result == None: 
+            audio_chunk = self.chunk_audio(whisper_audio, chunk_length=chunk_length)
+            for idx, chunk in enumerate(audio_chunk):
+                stt_result = stt_model.transcribe_text_api(chunk)
+                results.append(stt_result) 
+            return results 
+        elif transcribe_type == 'api' and vad_result != None:
+            pass 
+        elif transcribe_type == 'local':
+            pass 
+
+
 class PostProcessPipe(BasePipeline):
     def set_env(self, emb_config):
         self.audio_file_processor = AudioFileProcessor()
@@ -79,7 +105,4 @@ class PostProcessPipe(BasePipeline):
         pass 
 
 
-class STTPipe(BasePipeline):
-    def set_env(self, whisper_api, generation_config):
-        self.stt_model = WhisperSTT(whisper_api, generation_config)
-        
+
