@@ -1,6 +1,10 @@
-from openai import OpenAI
 from abc import abstractmethod
+from pydub import AudioSegment
+from openai import OpenAI
+import tempfile
+import json 
 import os
+import io 
 
 class STTModule:
     def __init__(self, openai_api=None):
@@ -46,7 +50,7 @@ class WhisperSTT(STTModule):
         '''
         transcription.segments: segment.start, segment.end, segment.text, segment.no_speech_prob, segment.seek, segment.temperature, segment.avg_logprob
         '''
-        whisper_audio = prepare_whisper_audio(audio_file)
+        whisper_audio = self.prepare_whisper_audio(audio_file)
         with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as temp_audio_file:
             whisper_audio.export(temp_audio_file.name, format="wav")
             with open(temp_audio_file.name, "rb") as audio_file:
@@ -56,9 +60,9 @@ class WhisperSTT(STTModule):
                     language='ko',
                     response_format="verbose_json",
                     # timestamp_granularities=["segment"],
-                    prompt="The sentence may be cut off. do not make up words to fill in the rest of the sentence." 
+                    # prompt="The sentence may be cut off. do not make up words to fill in the rest of the sentence." 
                 )
-            os.remove(tempfile_audio_file.name)
+            os.remove(temp_audio_file.name)
         segments = transcription.segments
         for segment in segments:
             segment.text = segment.text.strip()
