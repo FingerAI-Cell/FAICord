@@ -1,4 +1,4 @@
-from src import FrontendPipe, PostProcessPipe, STTPipe
+from src import FrontendPipe, VADPipe, PostProcessPipe, STTPipe
 from dotenv import load_dotenv
 import numpy as np
 import argparse 
@@ -22,8 +22,10 @@ def main(args):
     clean_audio = frontend_pipe.process_audio(args.file_name, chunk_length=300, deverve=True)
     # frontend_pipe.save_audio(clean_audio, 'frontend-processed.wav')
     vad_result = vad_pipe.get_vad_timestamp(clean_audio)
-    print(vad_result)
-    
+    # print(vad_result)
+    transcribe_result = stt_pipe.transcribe_text(clean_audio, transcribe_type='api')
+    print(transcribe_result)
+
     
 if __name__ == '__main__':
     cli_parser = argparse.ArgumentParser()
