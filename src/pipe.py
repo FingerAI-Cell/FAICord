@@ -108,8 +108,8 @@ class STTPipe(BasePipeline):
             seg.text = self.stt_model.extract_text(seg, text_filter=text_filter)
         
         if file_name != None: 
-            self.stt_model.save_as_txt(segments, file_name)
-        return segments 
+            self.stt_model.save_as_txt(stt_result, file_name)
+        return stt_result 
 
 
 class PostProcessPipe(BasePipeline):
