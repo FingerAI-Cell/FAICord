@@ -1,6 +1,5 @@
 from .preprocessors import DataProcessor, AudioFileProcessor
 from .audio_handler import VoiceEnhancer, NoiseHandler, AudioVisualizer
-from .pyannotes import PyannotVAD, PyannotDIAR, PyannotOSD
-from .speechbrains import SBEMB
+from .pyannotes import PyannotVAD
+from .pipe import FrontendPipe, VADPipe, PostProcessPipe, STTPipe
 from .stt import WhisperSTT
-from .pipe import FrontendPipe, VADPipe, DIARPipe, PostProcessPipe, STTPipe
