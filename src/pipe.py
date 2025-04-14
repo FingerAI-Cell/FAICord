@@ -1,4 +1,5 @@
-from src import NoiseHandler, VoiceEnhancer, AudioFileProcessor, AudioVisualizer
+from .preprocessors import AudioFileProcessor
+from .audio_handler import NoiseHandler, VoiceEnhancer, AudioVisualizer
 from abc import abstractmethod
 from pydub import AudioSegment
 from io import BytesIO
