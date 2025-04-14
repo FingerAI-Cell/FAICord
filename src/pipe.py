@@ -2,11 +2,11 @@ from .audio_handler import NoiseHandler, VoiceEnhancer, AudioVisualizer
 from .preprocessors import AudioFileProcessor
 from .pyannotes import PyannotDIAR, PyannotVAD
 from .speechbrains import SBEMB 
+from scipy.spatial.distance import cosine
 from abc import abstractmethod
 from pydub import AudioSegment
 from io import BytesIO
 import tempfile
-from scipy.spatial.distance import cosine
 
 
 class BasePipeline:
