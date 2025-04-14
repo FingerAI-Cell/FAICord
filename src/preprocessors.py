@@ -71,7 +71,6 @@ class AudioFileProcessor:
             end_ms = int((end_time * 1000) if end_time else total_duration_ms)
             return [audio_file[start_ms:end_ms]]
 
-
     def concat_chunk(self, chunk_list):
         return sum(chunk_list)
 
