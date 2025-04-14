@@ -24,7 +24,7 @@ def main(args):
     vad_result = vad_pipe.get_vad_timestamp(clean_audio)
     # print(vad_result)
     stt_result = stt_pipe.transcribe_text(clean_audio, transcribe_type='api')
-    save_file_name = 'stt_' + args.file_name.split('/')[-1].split('.')[0] + '.txt'
+    save_file_name = 'stt_clean_' + args.file_name.split('/')[-1].split('.')[0] + '.txt'
     stt_output = stt_pipe.postprocess_result(stt_result, file_name=os.path.join('./dataset/stt/', save_file_name))
     
 
