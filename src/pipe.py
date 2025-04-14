@@ -61,54 +61,6 @@ class VADPipe(BasePipeline):
         return vad_timestamp
 
 
-class DIARPipe(BasePipeline):
-    def set_env(self, diar_config):
-        self.diar_model = PyannotDIAR()
-        self.diar_config = diar_config 
-        self.audio_visualizer = AudioVisualizer()
-        self.audio_file_processor = AudioFileProcessor()
-    
-    def calc_emb_similarity(self, emb1, emb2):
-        return 1 - cosine(emb1, emb2)   # cosine()은 distance니까 1 - distance
-
-    def get_diar(self, audio_file, chunk_length=300, num_speakers=None, return_embeddings=False, file_name=None):
-        '''audio_file: AudioSeg'''
-        diar_pipe = self.diar_model.load_pipeline_from_pretrained(self.diar_config)
-        audio_seg = self.audio_file_processor.audiofile_to_AudioSeg(audio_file) 
-        chunks = self.audio_file_processor.chunk_audio(audio_seg, chunk_length=chunk_length)
-        results = []; emb_results = []
-        save_file_name = f"{file_name.split('/')[-1].split('.')[0]}"
-        for idx, chunk in enumerate(chunks):
-            if not chunk_length is None:
-                save_file_name = f"chunk_{idx}_{file_name.split('/')[-1].split('.')[0]}"
-            save_rttm_path = './dataset/rttm/' + save_file_name + '.rttm'
-            save_emb_path = './dataset/emb/' + save_file_name + '.npy'
-            with tempfile.NamedTemporaryFile(suffix=".wav") as temp_audio:
-                chunk.export(temp_audio.name, format="wav")
-                diar_result, emb = self.diar_model.get_diar_result(diar_pipe, temp_audio.name, num_speakers=num_speakers, return_embeddings=return_embeddings)
-                self.diar_model.save_as_rttm(diar_result, output_rttm_path=save_rttm_path, file_name=save_file_name)
-                self.diar_model.save_as_emb(emb, output_emb_path=save_emb_path)
-            results.append(diar_result)
-            emb_results.append(emb)
-        return results, emb_results
-
-    def map_speaker_info(self, diar_results, embeddings):
-        '''
-        get diar results of audio file chunks
-        diar_result: [(start_time, end_time), speaker info]
-        emb: [(speaker 0 emb), (speaker 1 emb), (speaker 2 emb), ...] 
-        '''
-        embeddings[0][0] 
-        '''
-        speaker_dict = dict() 
-        for idx, embedding in enumerate(embeddings): 
-            if idx == 0:
-                for idx2, speaker_emb in enumerate(embedding):
-                    speaker_dict[f'speaker_{str(idx2).zfill(2)}'] = speaker_emb 
-            else: 
-                verify_speaker(speaker_dict, embedding) 
-        '''
-
 class PostProcessPipe(BasePipeline):
     def set_env(self, emb_config):
         self.audio_file_processor = AudioFileProcessor()
@@ -130,4 +82,4 @@ class PostProcessPipe(BasePipeline):
 class STTPipe(BasePipeline):
     def set_env(self, whisper_api, generation_config):
         self.stt_model = WhisperSTT(whisper_api, generation_config)
-    
+        
