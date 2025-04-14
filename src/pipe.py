@@ -71,7 +71,7 @@ class STTPipe(BasePipeline):
 
     def transcribe_text(self, audio_file, vad_result=None, chunk_length=270, transcribe_type='api'):
         '''
-        
+
         '''
         whisper_audio = self.stt_model.prepare_whisper_audio(audio_file)
         results = []
