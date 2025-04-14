@@ -1,6 +1,7 @@
 
 from scipy.spatial.distance import cdist
 from pydub import AudioSegment
+from datetime import timedelta
 from io import BytesIO
 import soundfile as sf
 import numpy as np 
@@ -25,6 +26,10 @@ class DataProcessor:
             text = text.rstrip(".")
         text = re.sub(r"\s+", " ", text).strip()
         return text 
+
+    def format_timestamp(seconds: float) -> str:
+        td = timedelta(seconds=seconds)
+        return str(td)[:-3].zfill(8)  # '0:00:01.234' → '00:00:01.234'
 
 
 class VectorProcessor:

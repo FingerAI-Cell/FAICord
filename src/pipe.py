@@ -9,7 +9,6 @@ from io import BytesIO
 import tempfile
 
 
-
 class BasePipeline:
     @abstractmethod
     def set_env(self):
@@ -80,12 +79,37 @@ class STTPipe(BasePipeline):
             audio_chunk = self.chunk_audio(whisper_audio, chunk_length=chunk_length)
             for idx, chunk in enumerate(audio_chunk):
                 stt_result = self.stt_model.transcribe_text_api(chunk)
-                results.append(stt_result) 
+                results.extend(stt_result) 
             return results 
         elif transcribe_type == 'api' and vad_result != None:
             pass 
         elif transcribe_type == 'local':
             pass 
+
+    def extract_only_text(self, segments):
+        '''
+        input: segments 
+        output: text
+        '''
+        texts = "" 
+        for seg in segments: 
+            texts += seg.text + " "
+        return texts 
+
+    def postprocess_result(self, segments, no_speech_prob=0.9, temperature=0.5, file_name=None):
+        '''
+        extract text from segments  + apply word dictionary 
+        '''
+        text_filter = {
+            'no_speech_prob': no_speech_prob,
+            'temperature': temperature
+        }
+        for seg in segments: 
+            seg.text = self.stt_model.extract_text(seg, text_filter=text_filter)
+        
+        if file_name != None: 
+            self.stt_model.save_as_txt(segments, file_name)
+        return segments 
 
 
 class PostProcessPipe(BasePipeline):
@@ -95,15 +119,6 @@ class PostProcessPipe(BasePipeline):
 
     def get_vectoremb(self):
         pass 
-    
-    def cut_audio(self):
-        '''
-        cut audio by timestamp
-        '''
-        pass 
 
     def map_speaker(self):
-        pass 
-
-
-
+        pass

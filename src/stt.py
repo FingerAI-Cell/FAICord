@@ -1,6 +1,7 @@
 from abc import abstractmethod
 from pydub import AudioSegment
 from openai import OpenAI
+from datetime import timedelta
 import tempfile
 import json 
 import os
@@ -24,6 +25,10 @@ class WhisperSTT(STTModule):
     def set_client(self, openai_api):
         self.openai_client = OpenAI(api_key=openai_api)
     
+    def format_timestamp(self, seconds: float) -> str:
+        td = timedelta(seconds=seconds)
+        return str(td)[:-3].zfill(8)
+
     def load_word_dictionary(self, word_dict_path):
         with open(word_dict_path, mode='r', encoding='utf-8') as file:
             self.word_dict = json.load(file)    # JSON 데이터를 한번만 로드
@@ -60,12 +65,34 @@ class WhisperSTT(STTModule):
                     language='ko',
                     response_format="verbose_json",
                     # timestamp_granularities=["segment"],
-                    # prompt="The sentence may be cut off. do not make up words to fill in the rest of the sentence." 
                 )
             os.remove(temp_audio_file.name)
         segments = transcription.segments
-        # print(segments)
-        for segment in segments:
-            segment.text = segment.text.strip()
-            segment.text = self.apply_word_dictionary(segment.text, self.word_dict) + " "
         return segments
+
+    def extract_text(self, segment, text_filter=None):
+        '''
+        filter['temperature'] = 1.0
+        filter['no_speech_prob'] = 1.0
+        '''
+        if segment.temperature < text_filter['temperature'] and segment.no_speech_prob < text_filter['no_speech_prob']:   
+            segment.text = segment.text.strip()
+            segment.text = self.apply_word_dictionary(segment.text, self.word_dict) 
+        return segment.text
+
+    def save_as_txt(self, segments, file_name):
+        '''
+        file_name
+        '''
+        lines = []
+        for seg in segments:
+            start = self.format_timestamp(seg.start)
+            end = self.format_timestamp(seg.end)
+            text = seg.text
+            temp = seg.temperature
+            no_speech = round(seg.no_speech_prob, 2)
+            line = f"[{start} - {end}]  (temp={temp}, no_speech_prob={no_speech}) → {text}"
+            lines.append(line)
+        
+        with open(file_name, "w", encoding="utf-8") as f:
+            f.write("\n".join(lines))
