@@ -71,14 +71,14 @@ class STTPipe(BasePipeline):
 
     def transcribe_text(self, audio_file, vad_result=None, chunk_length=270, transcribe_type='api'):
         '''
-
+        
         '''
         whisper_audio = self.stt_model.prepare_whisper_audio(audio_file)
         results = []
         if transcribe_type == 'api' and vad_result == None: 
             audio_chunk = self.chunk_audio(whisper_audio, chunk_length=chunk_length)
             for idx, chunk in enumerate(audio_chunk):
-                stt_result = stt_model.transcribe_text_api(chunk)
+                stt_result = self.stt_model.transcribe_text_api(chunk)
                 results.append(stt_result) 
             return results 
         elif transcribe_type == 'api' and vad_result != None:
