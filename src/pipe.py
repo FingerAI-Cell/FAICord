@@ -5,6 +5,7 @@ from .stt import WhisperSTT
 from scipy.spatial.distance import cosine
 from abc import abstractmethod
 from pydub import AudioSegment
+from typing import List, Tuple
 from io import BytesIO
 import tempfile
 
@@ -69,37 +70,40 @@ class STTPipe(BasePipeline):
     def chunk_audio(self, audio_file, chunk_length=None, start_time=None, end_time=None):
         return self.audio_processor.chunk_audio(audio_file, chunk_length, start_time, end_time)
 
-    def merge_and_expand_vad_segments(self, segments, max_gap=1.0, min_length=2.0):
+    def merge_segments(
+        segments: List[Tuple[float, float]], 
+        min_length: float = 3.0, 
+        silence_gap: float = 5.0, 
+        min_keep_length: float = 0.5
+    ) -> List[Tuple[float, float]]:
         if not segments:
             return []
-
         merged = []
         i = 0
-        n = len(segments)
-        while i < n:
+        while i < len(segments):
             start, end = segments[i]
-            i += 1
-
-            # 병합 조건: max_gap 이내면 병합
-            while i < n and segments[i][0] - end <= max_gap:
-                end = max(end, segments[i][1])
-                i += 1
-
-            # 병합된 구간이 너무 짧으면 다음 구간 붙이기 (단, max_gap도 고려)
-            while end - start < min_length and i < n:
-                gap = segments[i][0] - end
-                if gap <= max_gap:
-                    end = max(end, segments[i][1])
-                    i += 1
-                else:
-                    print(f"Skipping merge: gap={gap:.2f} > max_gap")
-                    break
-
-            if end - start >= min_length:
+            duration = end - start
+            if duration >= min_length:    # 충분히 긴 세그먼트는 그대로 추가
                 merged.append((start, end))
-            else:
-                print(f"Discarding short segment: start={start:.2f}, end={end:.2f}, duration={end - start:.2f}")
-
+                i += 1
+                continue
+            # 짧은 세그먼트
+            next_seg = segments[i + 1] if i + 1 < len(segments) else None
+            prev_seg = merged[-1] if merged else None
+            merged_flag = False
+            # 다음 세그먼트와 병합 가능한 경우
+            if next_seg and (next_seg[0] - end < silence_gap):
+                merged.append((start, next_seg[1]))
+                i += 2
+                merged_flag = True
+            elif prev_seg and (start - prev_seg[1] < silence_gap):
+                merged[-1] = (prev_seg[0], end)
+                i += 1
+                merged_flag = True
+            if not merged_flag:
+                if duration >= min_keep_length:   # 병합 안 되었지만 길이가 일정 이상이면 그대로 추가
+                    merged.append((start, end))
+                i += 1
         return merged
 
     def transcribe_text(self, audio_file, vad_result=None, chunk_length=270, transcribe_type='api'):
@@ -115,7 +119,14 @@ class STTPipe(BasePipeline):
                 results.extend(stt_result) 
             return results 
         elif transcribe_type == 'api' and vad_result != None:
-            pass 
+            for time_s, time_e in vad_result:    # (start, end)
+                audio_chunk = self.chunk_audio(whisper_audio, start_time=time_s, end_time=time_e)[0]
+                try:
+                    stt_result = self.stt_model.transcribe_text_api(audio_chunk)
+                except:
+                    print(f'audio too short: {time_s}~{time_e}')
+                results.extend(stt_result)
+            return results
         elif transcribe_type == 'local':
             pass 
 
