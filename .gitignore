@@ -6,3 +6,4 @@
 /pretrained_models
 *.npy
 *.rttm
+*.txt
