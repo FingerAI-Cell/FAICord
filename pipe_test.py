@@ -17,9 +17,10 @@ def main(args):
     clean_audio = frontend_pipe.process_audio(args.file_name, chunk_length=300, deverve=True)
     # frontend_pipe.save_audio(clean_audio, 'frontend-processed.wav')
     vad_result = vad_pipe.get_vad_timestamp(clean_audio)
-    print(vad_result)
-    diar_result, emb = diar_pipe.get_diar(args.file_name, chunk_length=300, return_embeddings=True, file_name=args.file_name)
-    
+    # print(vad_result)
+    diar_result, emb_result = diar_pipe.get_diar(args.file_name, chunk_length=300, return_embeddings=True)
+    diar_pipe.save_files(diar_result, emb_result, file_name=args.file_name)
+
 
 if __name__ == '__main__':
     cli_parser = argparse.ArgumentParser()
