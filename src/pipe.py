@@ -71,26 +71,33 @@ class DIARPipe(BasePipeline):
     def calc_emb_similarity(self, emb1, emb2):
         return 1 - cosine(emb1, emb2)   # cosine()은 distance니까 1 - distance
 
-    def get_diar(self, audio_file, chunk_length=300, num_speakers=None, return_embeddings=False, file_name=None):
+    def get_diar(self, audio_file, chunk_length=300, num_speakers=None, return_embeddings=False):
         '''audio_file: AudioSeg'''
         diar_pipe = self.diar_model.load_pipeline_from_pretrained(self.diar_config)
         audio_seg = self.audio_file_processor.audiofile_to_AudioSeg(audio_file) 
         chunks = self.audio_file_processor.chunk_audio(audio_seg, chunk_length=chunk_length)
         results = []; emb_results = []
-        save_file_name = f"{file_name.split('/')[-1].split('.')[0]}"
         for idx, chunk in enumerate(chunks):
-            if not chunk_length is None:
-                save_file_name = f"chunk_{idx}_{file_name.split('/')[-1].split('.')[0]}"
-            save_rttm_path = './dataset/rttm/' + save_file_name + '.rttm'
-            save_emb_path = './dataset/emb/' + save_file_name + '.npy'
             with tempfile.NamedTemporaryFile(suffix=".wav") as temp_audio:
                 chunk.export(temp_audio.name, format="wav")
                 diar_result, emb = self.diar_model.get_diar_result(diar_pipe, temp_audio.name, num_speakers=num_speakers, return_embeddings=return_embeddings)
-                self.diar_model.save_as_rttm(diar_result, output_rttm_path=save_rttm_path, file_name=save_file_name)
-                self.diar_model.save_as_emb(emb, output_emb_path=save_emb_path)
             results.append(diar_result)
             emb_results.append(emb)
         return results, emb_results
+
+    def save_files(self, diar_result, emb_result, file_name):
+        '''
+
+        '''
+        save_file_name = file_name.split('/')[-1].split('.')[0]
+        for idx, chunk_diar in enumerate(diar_result):
+            if len(diar_result) > 1: 
+                save_file_name = f"chunk_{idx}_{file_name.split('/')[-1].split('.')[0]}"
+            save_rttm_path = './dataset/rttm/' + save_file_name + '.rttm'
+            save_emb_path = './dataset/emb/' + save_file_name + '.npy'
+
+            self.diar_model.save_as_rttm(chunk_diar, output_rttm_path=save_rttm_path, file_name=save_file_name)
+            self.diar_model.save_as_emb(emb_result[idx], output_emb_path=save_emb_path)
 
     def map_speaker_info(self, diar_results, embeddings):
         '''
