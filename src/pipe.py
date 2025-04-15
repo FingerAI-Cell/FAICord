@@ -71,39 +71,54 @@ class STTPipe(BasePipeline):
         return self.audio_processor.chunk_audio(audio_file, chunk_length, start_time, end_time)
 
     def merge_segments(
-        segments: List[Tuple[float, float]], 
-        min_length: float = 3.0, 
-        silence_gap: float = 5.0, 
-        min_keep_length: float = 0.5
-    ) -> List[Tuple[float, float]]:
+        self,
+        segments,
+        min_length=10,
+        silence_gap=5,
+        min_keep_length=0.5
+    ):
         if not segments:
             return []
+
         merged = []
-        i = 0
-        while i < len(segments):
-            start, end = segments[i]
+        idx = 0
+
+        while idx < len(segments):
+            start, end = segments[idx]
             duration = end - start
-            if duration >= min_length:    # 충분히 긴 세그먼트는 그대로 추가
+
+            # 충분히 길면 바로 추가
+            if duration >= min_length:
                 merged.append((start, end))
-                i += 1
+                idx += 1
                 continue
-            # 짧은 세그먼트
-            next_seg = segments[i + 1] if i + 1 < len(segments) else None
-            prev_seg = merged[-1] if merged else None
-            merged_flag = False
-            # 다음 세그먼트와 병합 가능한 경우
-            if next_seg and (next_seg[0] - end < silence_gap):
-                merged.append((start, next_seg[1]))
-                i += 2
-                merged_flag = True
-            elif prev_seg and (start - prev_seg[1] < silence_gap):
-                merged[-1] = (prev_seg[0], end)
-                i += 1
-                merged_flag = True
-            if not merged_flag:
-                if duration >= min_keep_length:   # 병합 안 되었지만 길이가 일정 이상이면 그대로 추가
-                    merged.append((start, end))
-                i += 1
+
+            # 병합 시도
+            acc_start = start
+            acc_end = end
+            acc_idx = idx
+            acc_duration = duration
+
+            # 다음 세그먼트들과 이어붙이기
+            while acc_duration < min_length and acc_idx + 1 < len(segments):
+                next_start, next_end = segments[acc_idx + 1]
+                gap = next_start - acc_end
+                if gap >= silence_gap:
+                    break  # 침묵 → 병합 종료
+
+                acc_end = next_end
+                acc_duration = acc_end - acc_start
+                acc_idx += 1
+
+            if acc_duration >= min_length:
+                merged.append((acc_start, acc_end))
+                idx = acc_idx + 1  # 병합된 다음 세그먼트로 이동
+            else:
+                # 병합 실패 → 단독 추가 여부 판단
+                if acc_end - acc_start >= min_keep_length:
+                    merged.append((acc_start, acc_end))
+                idx = acc_idx + 1
+
         return merged
 
     def transcribe_text(self, audio_file, vad_result=None, chunk_length=270, transcribe_type='api'):
