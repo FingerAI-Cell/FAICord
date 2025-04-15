@@ -69,6 +69,39 @@ class STTPipe(BasePipeline):
     def chunk_audio(self, audio_file, chunk_length=None, start_time=None, end_time=None):
         return self.audio_processor.chunk_audio(audio_file, chunk_length, start_time, end_time)
 
+    def merge_and_expand_vad_segments(self, segments, max_gap=1.0, min_length=2.0):
+        if not segments:
+            return []
+
+        merged = []
+        i = 0
+        n = len(segments)
+        while i < n:
+            start, end = segments[i]
+            i += 1
+
+            # 병합 조건: max_gap 이내면 병합
+            while i < n and segments[i][0] - end <= max_gap:
+                end = max(end, segments[i][1])
+                i += 1
+
+            # 병합된 구간이 너무 짧으면 다음 구간 붙이기 (단, max_gap도 고려)
+            while end - start < min_length and i < n:
+                gap = segments[i][0] - end
+                if gap <= max_gap:
+                    end = max(end, segments[i][1])
+                    i += 1
+                else:
+                    print(f"Skipping merge: gap={gap:.2f} > max_gap")
+                    break
+
+            if end - start >= min_length:
+                merged.append((start, end))
+            else:
+                print(f"Discarding short segment: start={start:.2f}, end={end:.2f}, duration={end - start:.2f}")
+
+        return merged
+
     def transcribe_text(self, audio_file, vad_result=None, chunk_length=270, transcribe_type='api'):
         '''
 
