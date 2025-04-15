@@ -1,4 +1,0 @@
-{
-    "model_name": "speechbrain/spkrec-ecapa-voxceleb",
-    "model_path": "pretrained_models/spkrec-ecapa-voxceleb"
-}
