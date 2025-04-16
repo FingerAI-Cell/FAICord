@@ -118,7 +118,6 @@ class STTPipe(BasePipeline):
                 if acc_end - acc_start >= min_keep_length:
                     merged.append((acc_start, acc_end))
                 idx = acc_idx + 1
-
         return merged
 
     def transcribe_text(self, audio_file, vad_result=None, chunk_length=270, transcribe_type='api'):
