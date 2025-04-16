@@ -1,3 +1,4 @@
+from intervaltree import Interval, IntervalTree
 from pyannote.audio import Inference
 from pyannote.audio import Pipeline
 from pyannote.audio import Model 
@@ -84,22 +85,42 @@ class PyannotDIAR(Pyannot):
                 start_time = segment.start 
                 end_time = segment.end
                 duration = end_time - start_time 
-                if duration >= 0.7:
+                if duration >= 0.3:
                     diar_result.append([(start_time, end_time), speaker])
         else:
             embeddings = diarization[1]
             for segment, _, speaker in diarization[0].itertracks(yield_label=True):
                 start_time, end_time = segment.start, segment.end 
                 duration = end_time - start_time 
-                if duration >= 0.7:
+                if duration >= 0.3:
                     diar_result.append([(start_time, end_time), speaker])
         return diar_result, embeddings
 
-    def add_vad_info(self, vad_result, diar_result):
+    def concat_diar_result(self, diar_result, chunk_offset=None):
+        total_diar_result = []
+        for idx, diar in enumerate(diar_result):
+            offset_result = [((start_time + chunk_offset * idx, end_time + chunk_offset * idx), speaker) for (start_time, end_time), speaker in diar]
+            total_diar_result.extend(offset_result)
+        return total_diar_result
+
+    def resegment_result(self, vad_result, diar_result):
         '''
-        add vad timeline speaker info which not in diar result 
+        resegment diar result using vad result
+        diar_result = [[diar result of chunk 1], [diar result of chunk 2], ... ]    (time_s, time_e), 'SPEAKER_00' 
+        1. delete speaker which not in vad_result 
+        2. add speaker info which in vad_result and not in diar_result   - new speaker: unknown   - skip 
         '''
-        pass
+        non_overlapped_segments = []
+        resegmented_diar = [] 
+        vad_tree = IntervalTree(Interval(start, end))
+        for (time_s, time_e), speaker in diar_result:
+            intersections = vad_tree.overlap(time_s, time_e)
+            if not intersections:
+                non_overlapped_segments.append(((time_s, time_e), speaker))
+            for interval in intersections:
+                resegmented_diar.append(((time_s, time_e), speaker))
+        print(f'non overlapped segment: {non_overlapped_segments}')
+        return resegmented_diar 
 
     def map_speaker_info(self, diar_results, embeddings):
         '''
