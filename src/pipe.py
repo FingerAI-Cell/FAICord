@@ -85,7 +85,13 @@ class DIARPipe(BasePipeline):
             emb_results.append(emb)
         return results, emb_results
 
-    def preprocess_result(self, diar_result):
+    def preprocess_result(self, diar_result, vad_result=None):
+        '''
+        resegment, speaker_mapping 
+        '''
+        if vad_result != None: 
+            resegmented_diar = self.diar_model.resegment_result(vad_result=vad_result, diar_result=diar_result)
+            return resegmented_diar
         pass 
 
     def save_files(self, diar_result, emb_result, file_name):

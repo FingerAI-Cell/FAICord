@@ -17,8 +17,8 @@ def main(args):
     clean_audio = frontend_pipe.process_audio(args.file_name, chunk_length=300, deverve=True)
     # frontend_pipe.save_audio(clean_audio, 'frontend-processed.wav')
     vad_result = vad_pipe.get_vad_timestamp(clean_audio)
-    # print(vad_result)
     diar_result, emb_result = diar_pipe.get_diar(args.file_name, chunk_length=300, return_embeddings=True)
+    diar_result = diar_pipe.resegment_result(vad_result=vad_result, diar_result=diar_result, chunk_offset=300)
     diar_pipe.save_files(diar_result, emb_result, file_name=args.file_name)
 
 
