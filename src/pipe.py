@@ -73,30 +73,23 @@ class STTPipe(BasePipeline):
     def merge_segments(
         self,
         segments,
-        min_length=10,
+        min_length=5,
         silence_gap=5,
         min_keep_length=0.5
     ):
         if not segments:
             return []
-
+        
         merged = []
         idx = 0
-
         while idx < len(segments):
             start, end = segments[idx]
             duration = end - start
-
-            # 충분히 길면 바로 추가
             if duration >= min_length:
                 merged.append((start, end))
                 idx += 1
                 continue
-
-            # 병합 시도
-            acc_start = start
-            acc_end = end
-            acc_idx = idx
+            acc_start, acc_end, acc_idx = start, end, idx 
             acc_duration = duration
 
             # 다음 세그먼트들과 이어붙이기
@@ -104,17 +97,15 @@ class STTPipe(BasePipeline):
                 next_start, next_end = segments[acc_idx + 1]
                 gap = next_start - acc_end
                 if gap >= silence_gap:
-                    break  # 침묵 → 병합 종료
-
+                    break    # 침묵 → 병합 종료
                 acc_end = next_end
                 acc_duration = acc_end - acc_start
                 acc_idx += 1
 
             if acc_duration >= min_length:
                 merged.append((acc_start, acc_end))
-                idx = acc_idx + 1  # 병합된 다음 세그먼트로 이동
+                idx = acc_idx + 1     # 병합된 다음 세그먼트로 이동
             else:
-                # 병합 실패 → 단독 추가 여부 판단
                 if acc_end - acc_start >= min_keep_length:
                     merged.append((acc_start, acc_end))
                 idx = acc_idx + 1
