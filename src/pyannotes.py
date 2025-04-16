@@ -63,10 +63,8 @@ class PyannotVAD(Pyannot):
             waveform, sample_rate = torchaudio.load(audio_file)
         else:
             raise TypeError("지원되지 않는 오디오 형식입니다.")
-
         audio_in_memory = {"waveform": waveform, "sample_rate": sample_rate}
         vad_result = pipeline(audio_in_memory)
-
         vad_timestamp = []
         for speech in vad_result.get_timeline().support():
             vad_timestamp.append((speech.start, speech.end))
@@ -76,7 +74,7 @@ class PyannotVAD(Pyannot):
 class PyannotDIAR(Pyannot):
     def __init__(self):
         super().__init__()
-  
+    
     def get_diar_result(self, pipeline, audio_file, num_speakers=None, return_embeddings=False):
         diarization = pipeline(audio_file, num_speakers=num_speakers, return_embeddings=return_embeddings)
         diar_result = []
@@ -96,6 +94,29 @@ class PyannotDIAR(Pyannot):
                 if duration >= 0.7:
                     diar_result.append([(start_time, end_time), speaker])
         return diar_result, embeddings
+
+    def add_vad_info(self, vad_result, diar_result):
+        '''
+        add vad timeline speaker info which not in diar result 
+        '''
+        pass
+
+    def map_speaker_info(self, diar_results, embeddings):
+        '''
+        get diar results of audio file chunks
+        diar_result: [(start_time, end_time), speaker info]
+        emb: [(speaker 0 emb), (speaker 1 emb), (speaker 2 emb), ...] 
+        '''
+        embeddings[0][0] 
+        '''
+        speaker_dict = dict() 
+        for idx, embedding in enumerate(embeddings): 
+            if idx == 0:
+                for idx2, speaker_emb in enumerate(embedding):
+                    speaker_dict[f'speaker_{str(idx2).zfill(2)}'] = speaker_emb 
+            else: 
+                verify_speaker(speaker_dict, embedding) 
+        '''
 
     def save_as_rttm(self, diar_result, output_rttm_path=None, file_name=None):
         '''

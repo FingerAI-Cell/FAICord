@@ -85,9 +85,12 @@ class DIARPipe(BasePipeline):
             emb_results.append(emb)
         return results, emb_results
 
+    def preprocess_result(self, diar_result):
+        pass 
+
     def save_files(self, diar_result, emb_result, file_name):
         '''
-
+        save diar result, numpy emb as rttm, npy format for each chunk
         '''
         save_file_name = file_name.split('/')[-1].split('.')[0]
         for idx, chunk_diar in enumerate(diar_result):
@@ -95,26 +98,10 @@ class DIARPipe(BasePipeline):
                 save_file_name = f"chunk_{idx}_{file_name.split('/')[-1].split('.')[0]}"
             save_rttm_path = './dataset/rttm/' + save_file_name + '.rttm'
             save_emb_path = './dataset/emb/' + save_file_name + '.npy'
-
             self.diar_model.save_as_rttm(chunk_diar, output_rttm_path=save_rttm_path, file_name=save_file_name)
             self.diar_model.save_as_emb(emb_result[idx], output_emb_path=save_emb_path)
 
-    def map_speaker_info(self, diar_results, embeddings):
-        '''
-        get diar results of audio file chunks
-        diar_result: [(start_time, end_time), speaker info]
-        emb: [(speaker 0 emb), (speaker 1 emb), (speaker 2 emb), ...] 
-        '''
-        embeddings[0][0] 
-        '''
-        speaker_dict = dict() 
-        for idx, embedding in enumerate(embeddings): 
-            if idx == 0:
-                for idx2, speaker_emb in enumerate(embedding):
-                    speaker_dict[f'speaker_{str(idx2).zfill(2)}'] = speaker_emb 
-            else: 
-                verify_speaker(speaker_dict, embedding) 
-        '''
+    
 
 class PostProcessPipe(BasePipeline):
     def set_env(self, emb_config):
