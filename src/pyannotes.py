@@ -112,7 +112,7 @@ class PyannotDIAR(Pyannot):
         '''
         non_overlapped_segments = []
         resegmented_diar = [] 
-        vad_tree = IntervalTree(Interval(start, end))
+        vad_tree = IntervalTree(Interval(time_s, time_e) for time_s, time_e in vad_result)
         for (time_s, time_e), speaker in diar_result:
             intersections = vad_tree.overlap(time_s, time_e)
             if not intersections:
