@@ -91,7 +91,7 @@ class WhisperSTT(STTModule):
             text = seg.text
             temp = seg.temperature
             no_speech = round(seg.no_speech_prob, 2)
-            line = f"[{start} - {end}] {text}   ** no speech prob: {no_speech}"
+            line = f"[{start}-{end}, {no_speech}] {text}"
             lines.append(line)
         
         with open(file_name, "w", encoding="utf-8") as f:
