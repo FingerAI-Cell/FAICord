@@ -23,8 +23,10 @@ def main(args):
     # frontend_pipe.save_audio(clean_audio, 'frontend-processed.wav')
     vad_result = vad_pipe.get_vad_timestamp(clean_audio)
     # print(vad_result)
-    stt_result = stt_pipe.transcribe_text(clean_audio, transcribe_type='api')
-    save_file_name = 'stt_clean_' + args.file_name.split('/')[-1].split('.')[0] + '.txt'
+    vad_merged = stt_pipe.merge_segments(vad_result, min_length=5, silence_gap=5, min_keep_length=0.5)
+    print(vad_merged)
+    stt_result = stt_pipe.transcribe_text(args.file_name, vad_result=vad_merged, transcribe_type='api')
+    save_file_name = 'stt_origin_vad_' + args.file_name.split('/')[-1].split('.')[0] + '.txt'
     stt_output = stt_pipe.postprocess_result(stt_result, file_name=os.path.join('./dataset/stt/', save_file_name))
     
 
