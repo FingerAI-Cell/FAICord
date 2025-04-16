@@ -85,12 +85,14 @@ class DIARPipe(BasePipeline):
             emb_results.append(emb)
         return results, emb_results
 
-    def preprocess_result(self, diar_result, vad_result=None):
+    def preprocess_result(self, diar_result, vad_result=None, chunk_offset=None):
         '''
         resegment, speaker_mapping 
         '''
+        # mapped_result = self.diar_model.map_speaker_info(diar_result)   
+        total_diar = self.diar_model.concat_diar_result(diar_result, chunk_offset=chunk_offset)
         if vad_result != None: 
-            resegmented_diar = self.diar_model.resegment_result(vad_result=vad_result, diar_result=diar_result)
+            resegmented_diar = self.diar_model.resegment_result(vad_result=vad_result, diar_result=total_diar)
             return resegmented_diar
         pass 
 
@@ -107,7 +109,7 @@ class DIARPipe(BasePipeline):
             self.diar_model.save_as_rttm(chunk_diar, output_rttm_path=save_rttm_path, file_name=save_file_name)
             self.diar_model.save_as_emb(emb_result[idx], output_emb_path=save_emb_path)
 
-    
+
 
 class PostProcessPipe(BasePipeline):
     def set_env(self, emb_config):
