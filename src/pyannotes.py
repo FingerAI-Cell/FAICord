@@ -71,3 +71,5 @@ class PyannotVAD(Pyannot):
         for speech in vad_result.get_timeline().support():
             vad_timestamp.append((speech.start, speech.end))
         return vad_timestamp
+
+    

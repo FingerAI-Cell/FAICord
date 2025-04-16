@@ -61,29 +61,19 @@ class VADPipe(BasePipeline):
         vad_timestamp = self.vad_model.get_vad_timestamp(vad_pipeline, audio_file)
         return vad_timestamp
 
-
-class STTPipe(BasePipeline):
-    def set_env(self, whisper_api, generation_config):
-        self.audio_processor = AudioFileProcessor()
-        self.stt_model = WhisperSTT(whisper_api, generation_config)
-
-    def chunk_audio(self, audio_file, chunk_length=None, start_time=None, end_time=None):
-        return self.audio_processor.chunk_audio(audio_file, chunk_length, start_time, end_time)
-
     def merge_segments(
         self,
-        segments,
+        vad_segments,
         min_length=5,
         silence_gap=5,
         min_keep_length=0.5
     ):
-        if not segments:
+        if not vad_segments:
             return []
-        
         merged = []
         idx = 0
-        while idx < len(segments):
-            start, end = segments[idx]
+        while idx < len(vad_segments):
+            start, end = vad_segments[idx]
             duration = end - start
             if duration >= min_length:
                 merged.append((start, end))
@@ -93,15 +83,14 @@ class STTPipe(BasePipeline):
             acc_duration = duration
 
             # 다음 세그먼트들과 이어붙이기
-            while acc_duration < min_length and acc_idx + 1 < len(segments):
-                next_start, next_end = segments[acc_idx + 1]
+            while acc_duration < min_length and acc_idx + 1 < len(vad_segments):
+                next_start, next_end = vad_segments[acc_idx + 1]
                 gap = next_start - acc_end
                 if gap >= silence_gap:
                     break    # 침묵 → 병합 종료
                 acc_end = next_end
                 acc_duration = acc_end - acc_start
                 acc_idx += 1
-
             if acc_duration >= min_length:
                 merged.append((acc_start, acc_end))
                 idx = acc_idx + 1     # 병합된 다음 세그먼트로 이동
@@ -110,6 +99,15 @@ class STTPipe(BasePipeline):
                     merged.append((acc_start, acc_end))
                 idx = acc_idx + 1
         return merged
+
+
+class STTPipe(BasePipeline):
+    def set_env(self, whisper_api, generation_config):
+        self.audio_processor = AudioFileProcessor()
+        self.stt_model = WhisperSTT(whisper_api, generation_config)
+
+    def chunk_audio(self, audio_file, chunk_length=None, start_time=None, end_time=None):
+        return self.audio_processor.chunk_audio(audio_file, chunk_length, start_time, end_time)
 
     def transcribe_text(self, audio_file, vad_result=None, chunk_length=270, transcribe_type='api'):
         '''
@@ -155,7 +153,7 @@ class STTPipe(BasePipeline):
         }
         for seg in stt_result: 
             seg.text = self.stt_model.extract_text(seg, text_filter=text_filter)
-        
+
         if file_name != None: 
             self.stt_model.save_as_txt(stt_result, file_name)
         return stt_result 
