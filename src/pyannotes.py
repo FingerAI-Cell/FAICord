@@ -76,6 +76,10 @@ class PyannotDIAR(Pyannot):
     def __init__(self):
         super().__init__()
     
+    def calc_emb_similarity(self, emb1, emb2):
+        from scipy.spatial.distance import cosine
+        return 1 - cosine(emb1, emb2)    # cosine()은 distance니까 1 - distance
+
     def get_diar_result(self, pipeline, audio_file, num_speakers=None, return_embeddings=False):
         diarization = pipeline(audio_file, num_speakers=num_speakers, return_embeddings=return_embeddings)
         diar_result = []
@@ -114,14 +118,12 @@ class PyannotDIAR(Pyannot):
         for (start_time, end_time), speaker in diar_result:
             start_chunk_idx = int(start_time // chunk_offset)
             end_chunk_idx = int(end_time // chunk_offset)
-            
             for chunk_idx in range(start_chunk_idx, end_chunk_idx + 1):
                 chunk_start = chunk_offset * chunk_idx
                 chunk_end = chunk_start + chunk_offset
                 
                 seg_start = max(start_time, chunk_start)
                 seg_end = min(end_time, chunk_end)
-
                 if seg_end - seg_start > 0:
                     splited_diar_result[chunk_idx].append(((seg_start - chunk_start, seg_end - chunk_start), speaker))
         return [splited_diar_result[idx] for idx in sorted(splited_diar_result)]
@@ -143,15 +145,13 @@ class PyannotDIAR(Pyannot):
             for interval in intersections:
                 resegmented_diar.append(((time_s, time_e), speaker))
         # print(f'non overlapped segment: {non_overlapped_segments}')
-        return resegmented_diar 
+        return resegmented_diar
 
-    def map_speaker_info(self, diar_results, embeddings):
+    def map_speaker_info(self, diar_results, embeddings, threshold=0.5):
         '''
         get diar results of audio file chunks
-        diar_result: [(start_time, end_time), speaker info]
-        emb: [(speaker 0 emb), (speaker 1 emb), (speaker 2 emb), ...] 
-        '''
-        embeddings[0][0] 
+        diar_result: [((start_time, end_time), speaker info), (start_time, end_time), speaker_info, ...), ((start_time, end_time), speaker_info), ...)] 
+        emb: [((speaker 0 emb), (speaker 1 emb), (speaker 2 emb)), ((speaker 0 emb), (speaker 1 emb)), ... ] 
         '''
         speaker_dict = dict() 
         for idx, embedding in enumerate(embeddings): 
@@ -159,8 +159,11 @@ class PyannotDIAR(Pyannot):
                 for idx2, speaker_emb in enumerate(embedding):
                     speaker_dict[f'speaker_{str(idx2).zfill(2)}'] = speaker_emb 
             else: 
-                verify_speaker(speaker_dict, embedding) 
-        '''
+                for idx2, speaker_emb in enumerate(embedding):
+                    for key, value in speaker_dict.items():
+                        emb_similarity = self.calc_emb_similarity(value, speaker_emb)
+                        print(f'emb smilarity of {key}-{idx2}, chunk {idx}: {emb_similarity}')
+                                
 
     def save_as_rttm(self, diar_result, output_rttm_path=None, file_name=None):
         '''

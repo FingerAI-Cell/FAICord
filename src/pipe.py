@@ -2,7 +2,6 @@ from .audio_handler import NoiseHandler, VoiceEnhancer, AudioVisualizer
 from .preprocessors import AudioFileProcessor
 from .pyannotes import PyannotDIAR, PyannotVAD
 from .speechbrains import SBEMB 
-from scipy.spatial.distance import cosine
 from abc import abstractmethod
 from pydub import AudioSegment
 from io import BytesIO
@@ -67,9 +66,6 @@ class DIARPipe(BasePipeline):
         self.diar_config = diar_config 
         self.audio_visualizer = AudioVisualizer()
         self.audio_file_processor = AudioFileProcessor()
-    
-    def calc_emb_similarity(self, emb1, emb2):
-        return 1 - cosine(emb1, emb2)   # cosine()은 distance니까 1 - distance
 
     def get_diar(self, audio_file, chunk_length=300, num_speakers=None, return_embeddings=False):
         '''audio_file: AudioSeg'''
@@ -85,7 +81,7 @@ class DIARPipe(BasePipeline):
             emb_results.append(emb)
         return results, emb_results
 
-    def preprocess_result(self, diar_result, vad_result=None, chunk_offset=None):
+    def preprocess_result(self, diar_result, vad_result=None, emb_result=None, chunk_offset=None):
         '''
         resegment, speaker_mapping 
         '''
@@ -93,7 +89,9 @@ class DIARPipe(BasePipeline):
         total_diar = self.diar_model.concat_diar_result(diar_result, chunk_offset=chunk_offset)
         if vad_result != None: 
             resegmented_diar = self.diar_model.resegment_result(vad_result=vad_result, diar_result=total_diar)
-            return self.diar_model.split_diar_result(resegmented_diar, chunk_offset=chunk_offset)
+            resegmented_diar = self.diar_model.split_diar_result(resegmented_diar, chunk_offset=chunk_offset)
+            self.diar_model.map_speaker_info(resegmented_diar, emb_result)
+            return resegmented_diar
         pass 
 
     def save_files(self, diar_result, emb_result, file_name):

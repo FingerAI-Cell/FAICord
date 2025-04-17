@@ -1,9 +1,9 @@
 from src import FrontendPipe, VADPipe, DIARPipe, PostProcessPipe
 from dotenv import load_dotenv
 import numpy as np
-import argparse 
-import json 
-import os 
+import argparse
+import json
+import os
 
 
 def main(args):
@@ -19,9 +19,10 @@ def main(args):
     # frontend_pipe.save_audio(clean_audio, 'frontend-processed.wav')
     vad_result = vad_pipe.get_vad_timestamp(clean_audio)
     diar_result, emb_result = diar_pipe.get_diar(args.file_name, chunk_length=300, return_embeddings=True)
-    diar_result = diar_pipe.preprocess_result(vad_result=vad_result, diar_result=diar_result, chunk_offset=300)
+    diar_result = diar_pipe.preprocess_result(diar_result=diar_result, vad_result=vad_result, emb_result=emb_result, chunk_offset=300)
     diar_pipe.save_files(diar_result, emb_result, file_name=args.file_name)
     
+
 if __name__ == '__main__':
     cli_parser = argparse.ArgumentParser()
     cli_parser.add_argument('--model_config_path', type=str, default='./models')
