@@ -5,6 +5,11 @@ import argparse
 import json 
 import os 
 
+'''code refactoring to do 
+resegment 후에도 diar_result 구조 유지하기. 
+resegment -> save_files가 더 좋아보임 
+'''
+
 def main(args):
     frontend_pipe = FrontendPipe()
     vad_pipe = VADPipe()
@@ -18,9 +23,10 @@ def main(args):
     # frontend_pipe.save_audio(clean_audio, 'frontend-processed.wav')
     vad_result = vad_pipe.get_vad_timestamp(clean_audio)
     diar_result, emb_result = diar_pipe.get_diar(args.file_name, chunk_length=300, return_embeddings=True)
-    diar_pipe.save_files(diar_result, emb_result, file_name=args.file_name)
+    print(diar_result[-1], end='\n\n')
     diar_result = diar_pipe.preprocess_result(vad_result=vad_result, diar_result=diar_result, chunk_offset=300)
-    
+    diar_pipe.save_files(diar_result, emb_result, file_name=args.file_name)
+    print(diar_result[-1])
 
 if __name__ == '__main__':
     cli_parser = argparse.ArgumentParser()
