@@ -103,6 +103,29 @@ class PyannotDIAR(Pyannot):
             total_diar_result.extend(offset_result)
         return total_diar_result
 
+    def split_diar_result(self, diar_result, chunk_offset=300):
+        """
+        diar_result: [( (start, end), speaker ), ... ]
+        chunk_offset: 청크 단위 (기본값 300초)
+        """
+        from collections import defaultdict
+        
+        splited_diar_result = defaultdict(list)      
+        for (start_time, end_time), speaker in diar_result:
+            start_chunk_idx = int(start_time // chunk_offset)
+            end_chunk_idx = int(end_time // chunk_offset)
+            
+            for chunk_idx in range(start_chunk_idx, end_chunk_idx + 1):
+                chunk_start = chunk_offset * chunk_idx
+                chunk_end = chunk_start + chunk_offset
+                
+                seg_start = max(start_time, chunk_start)
+                seg_end = min(end_time, chunk_end)
+
+                if seg_end - seg_start > 0:
+                    splited_diar_result[chunk_idx].append(((seg_start - chunk_start, seg_end - chunk_start), speaker))
+        return [splited_diar_result[idx] for idx in sorted(splited_diar_result)]
+
     def resegment_result(self, vad_result, diar_result):
         '''
         resegment diar result using vad result
@@ -119,7 +142,7 @@ class PyannotDIAR(Pyannot):
                 non_overlapped_segments.append(((time_s, time_e), speaker))
             for interval in intersections:
                 resegmented_diar.append(((time_s, time_e), speaker))
-        print(f'non overlapped segment: {non_overlapped_segments}')
+        # print(f'non overlapped segment: {non_overlapped_segments}')
         return resegmented_diar 
 
     def map_speaker_info(self, diar_results, embeddings):

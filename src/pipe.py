@@ -93,7 +93,7 @@ class DIARPipe(BasePipeline):
         total_diar = self.diar_model.concat_diar_result(diar_result, chunk_offset=chunk_offset)
         if vad_result != None: 
             resegmented_diar = self.diar_model.resegment_result(vad_result=vad_result, diar_result=total_diar)
-            return resegmented_diar
+            return self.diar_model.split_diar_result(resegmented_diar, chunk_offset=chunk_offset)
         pass 
 
     def save_files(self, diar_result, emb_result, file_name):
@@ -108,7 +108,6 @@ class DIARPipe(BasePipeline):
             save_emb_path = './dataset/emb/' + save_file_name + '.npy'
             self.diar_model.save_as_rttm(chunk_diar, output_rttm_path=save_rttm_path, file_name=save_file_name)
             self.diar_model.save_as_emb(emb_result[idx], output_emb_path=save_emb_path)
-
 
 
 class PostProcessPipe(BasePipeline):
