@@ -83,21 +83,29 @@ class PyannotDIAR(Pyannot):
     def get_diar_result(self, pipeline, audio_file, num_speakers=None, return_embeddings=False):
         diarization = pipeline(audio_file, num_speakers=num_speakers, return_embeddings=return_embeddings)
         diar_result = []
-        embeddings = None 
+        embeddings = None
+        seen_segments = set()
+
         if return_embeddings == False:
             for segment, _, speaker in diarization.itertracks(yield_label=True):
-                start_time = segment.start 
+                start_time = segment.start
                 end_time = segment.end
-                duration = end_time - start_time 
+                duration = end_time - start_time
                 if duration >= 0.3:
-                    diar_result.append([(start_time, end_time), speaker])
+                    segment_key = (round(start_time, 3), round(end_time, 3), speaker)
+                    if segment_key not in seen_segments:
+                        diar_result.append([(start_time, end_time), speaker])
+                        seen_segments.add(segment_key)
         else:
             embeddings = diarization[1]
             for segment, _, speaker in diarization[0].itertracks(yield_label=True):
-                start_time, end_time = segment.start, segment.end 
-                duration = end_time - start_time 
+                start_time, end_time = segment.start, segment.end
+                duration = end_time - start_time
                 if duration >= 0.3:
-                    diar_result.append([(start_time, end_time), speaker])
+                    segment_key = (round(start_time, 3), round(end_time, 3), speaker)
+                    if segment_key not in seen_segments:
+                        diar_result.append([(start_time, end_time), speaker])
+                        seen_segments.add(segment_key)
         return diar_result, embeddings
 
     def concat_diar_result(self, diar_result, chunk_offset=None):
@@ -130,39 +138,60 @@ class PyannotDIAR(Pyannot):
 
     def resegment_result(self, vad_result, diar_result):
         '''
-        resegment diar result using vad result
-        diar_result = [[diar result of chunk 1], [diar result of chunk 2], ... ]    (time_s, time_e), 'SPEAKER_00' 
-        1. delete speaker which not in vad_result 
-        2. add speaker info which in vad_result and not in diar_result   - new speaker: unknown   - skip 
+        Re-segment diar_result using vad_result
+
+        - diar_result: [( (start_time, end_time), speaker ), ... ]
+        - vad_result: [(start_time, end_time), ...]
+
+        목적: 
+        1. VAD에 걸친 diar segment만 resegmented_diar에 추가
+        2. VAD에 걸리지 않은 diar segment는 non_overlapped_segments에 추가
+        3. 추가할 때 중복 방지 (set 사용)
         '''
         non_overlapped_segments = []
-        resegmented_diar = [] 
+        resegmented_diar = []
         vad_tree = IntervalTree(Interval(time_s, time_e) for time_s, time_e in vad_result)
+        seen_segments = set()  # 중복 방지용
+
         for (time_s, time_e), speaker in diar_result:
-            intersections = vad_tree.overlap(time_s, time_e)
+            intersections = vad_tree.overlap(time_s, time_e)           
+            segment_key = (round(time_s, 3), round(time_e, 3), speaker)
+
             if not intersections:
                 non_overlapped_segments.append(((time_s, time_e), speaker))
-            for interval in intersections:
-                resegmented_diar.append(((time_s, time_e), speaker))
-        # print(f'non overlapped segment: {non_overlapped_segments}')
+            else:
+                if segment_key not in seen_segments:
+                    resegmented_diar.append(((time_s, time_e), speaker))
+                    seen_segments.add(segment_key)
         return resegmented_diar
 
-    def map_speaker_info(self, diar_results, embeddings, threshold=0.5):
-        '''
-        get diar results of audio file chunks
-        diar_result: [((start_time, end_time), speaker info), (start_time, end_time), speaker_info, ...), ((start_time, end_time), speaker_info), ...)] 
-        emb: [((speaker 0 emb), (speaker 1 emb), (speaker 2 emb)), ((speaker 0 emb), (speaker 1 emb)), ... ] 
-        '''
-        speaker_dict = dict() 
-        for idx, embedding in enumerate(embeddings): 
-            if idx == 0:
-                for idx2, speaker_emb in enumerate(embedding):
-                    speaker_dict[f'speaker_{str(idx2).zfill(2)}'] = speaker_emb 
-            else: 
-                for idx2, speaker_emb in enumerate(embedding):
-                    for key, value in speaker_dict.items():
-                        emb_similarity = self.calc_emb_similarity(value, speaker_emb)
-                        print(f'emb smilarity of {key}-{idx2}, chunk {idx}: {emb_similarity}')
+    def map_speaker_info(self, diar_results, embeddings, threshold=0.8):
+        speaker_keys = []
+        speaker_embeddings = []
+        for idx, chunk_embeds in enumerate(embeddings):
+            for idx2, speaker_emb in enumerate(chunk_embeds):
+                speaker_emb = np.array(speaker_emb)  # (256,)
+                if idx == 0:
+                    speaker_keys.append(f'speaker_{str(idx2).zfill(2)}')
+                    speaker_embeddings.append(speaker_emb)
+                else:
+                    speaker_embeddings_arr = np.stack(speaker_embeddings)  # (n_speakers, 256)
+                    
+                    # cosine similarity 한 번에 계산
+                    norm_db = np.linalg.norm(speaker_embeddings_arr, axis=1)
+                    norm_query = np.linalg.norm(speaker_emb)
+                    similarities = (speaker_embeddings_arr @ speaker_emb) / (norm_db * norm_query)
+
+                    best_idx = np.argmax(similarities)
+                    best_similarity = similarities[best_idx]
+                    if best_similarity >= threshold:
+                        mapped_speaker = speaker_keys[best_idx]
+                    else:
+                        mapped_speaker = f'speaker_{str(len(speaker_keys)).zfill(2)}'
+                        speaker_keys.append(mapped_speaker)
+                        speaker_embeddings.append(speaker_emb)
+                    print(f'Chunk {idx}, Speaker {idx2} mapped to {mapped_speaker} (similarity {best_similarity:.4f})')
+        return speaker_keys
                                 
 
     def save_as_rttm(self, diar_result, output_rttm_path=None, file_name=None):

@@ -90,7 +90,8 @@ class DIARPipe(BasePipeline):
         if vad_result != None: 
             resegmented_diar = self.diar_model.resegment_result(vad_result=vad_result, diar_result=total_diar)
             resegmented_diar = self.diar_model.split_diar_result(resegmented_diar, chunk_offset=chunk_offset)
-            self.diar_model.map_speaker_info(resegmented_diar, emb_result)
+            mapped_result = self.diar_model.map_speaker_info(resegmented_diar, emb_result)
+            print(mapped_result)
             return resegmented_diar
         pass 
 
