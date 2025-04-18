@@ -1,9 +1,9 @@
-from intervaltree import Interval, IntervalTree
 from pyannote.audio import Inference
 from pyannote.audio import Pipeline
 from pyannote.audio import Model 
 from pyannote.audio import Audio
 from pyannote.core import Segment
+from collections import defaultdict
 from pydub import AudioSegment
 from pathlib import Path
 from io import BytesIO
@@ -80,18 +80,17 @@ class PyannotDIAR(Pyannot):
         from scipy.spatial.distance import cosine
         return 1 - cosine(emb1, emb2)    # cosine()은 distance니까 1 - distance
     
-    def get_diar_result(self, pipeline, audio_file, num_speakers=None, return_embeddings=False):
+    def get_diar_result(self, pipeline, audio_file, num_speakers=None, min_duration=0.3, return_embeddings=False):
         diarization = pipeline(audio_file, num_speakers=num_speakers, return_embeddings=return_embeddings)
         diar_result = []
         embeddings = None
         seen_segments = set()
-
         if return_embeddings == False:
             for segment, _, speaker in diarization.itertracks(yield_label=True):
                 start_time = segment.start
                 end_time = segment.end
                 duration = end_time - start_time
-                if duration >= 0.3:
+                if duration >= min_duration:
                     segment_key = (round(start_time, 3), round(end_time, 3), speaker)
                     if segment_key not in seen_segments:
                         diar_result.append([(start_time, end_time), speaker])
@@ -101,7 +100,7 @@ class PyannotDIAR(Pyannot):
             for segment, _, speaker in diarization[0].itertracks(yield_label=True):
                 start_time, end_time = segment.start, segment.end
                 duration = end_time - start_time
-                if duration >= 0.3:
+                if duration >= min_duration:
                     segment_key = (round(start_time, 3), round(end_time, 3), speaker)
                     if segment_key not in seen_segments:
                         diar_result.append([(start_time, end_time), speaker])
@@ -119,9 +118,7 @@ class PyannotDIAR(Pyannot):
         """
         diar_result: [( (start, end), speaker ), ... ]
         chunk_offset: 청크 단위 (기본값 300초)
-        """
-        from collections import defaultdict
-        
+        """        
         splited_diar_result = defaultdict(list)      
         for (start_time, end_time), speaker in diar_result:
             start_chunk_idx = int(start_time // chunk_offset)
@@ -132,10 +129,17 @@ class PyannotDIAR(Pyannot):
                 
                 seg_start = max(start_time, chunk_start)
                 seg_end = min(end_time, chunk_end)
-
                 if seg_end - seg_start > 0:
                     splited_diar_result[chunk_idx].append(((seg_start - chunk_start, seg_end - chunk_start), speaker))
         return [splited_diar_result[idx] for idx in sorted(splited_diar_result)]
+
+    def filter_filler(self, diar_results, filter_duration=1):
+        for idx, diar_result in enumerate(diar_results):
+            for idx2, ((time_s, time_e), speaker) in enumerate(diar_result): 
+                duration = time_e - time_s 
+                if duration < filter_duration: 
+                    diar_result[idx2] = ((time_s, time_e), 'filler')
+        return diar_results
 
     def map_speaker_info(self, diar_results, embeddings, threshold=0.65):
         '''
@@ -143,7 +147,6 @@ class PyannotDIAR(Pyannot):
         '''
         speaker_dict = dict() 
         speaker_no = -1 
-
         for idx, chunk_embedding in enumerate(embeddings): 
             if idx == 0:   # 첫 청크: 그냥 등록
                 for idx2, speaker_emb in enumerate(chunk_embedding):
