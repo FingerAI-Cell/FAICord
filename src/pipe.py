@@ -2,6 +2,7 @@ from .audio_handler import NoiseHandler, VoiceEnhancer, AudioVisualizer
 from .preprocessors import AudioFileProcessor
 from .pyannotes import PyannotDIAR, PyannotVAD
 from .speechbrains import SBEMB 
+from intervaltree import Interval, IntervalTree
 from abc import abstractmethod
 from pydub import AudioSegment
 from io import BytesIO
@@ -87,7 +88,6 @@ class DIARPipe(BasePipeline):
         - diar_result: [( (start_time, end_time), speaker ), ... ]
         - vad_result: [(start_time, end_time), ...]
 
-        목적: 
         1. VAD에 걸친 diar segment만 resegmented_diar에 추가
         2. VAD에 걸리지 않은 diar segment는 non_overlapped_segments에 추가
         3. 추가할 때 중복 방지 (set 사용)
@@ -95,12 +95,10 @@ class DIARPipe(BasePipeline):
         non_overlapped_segments = []
         resegmented_diar = []
         vad_tree = IntervalTree(Interval(time_s, time_e) for time_s, time_e in vad_result)
-        seen_segments = set()  # 중복 방지용
-
+        seen_segments = set()    # 중복 방지용
         for (time_s, time_e), speaker in diar_result:
             intersections = vad_tree.overlap(time_s, time_e)           
             segment_key = (round(time_s, 3), round(time_e, 3), speaker)
-
             if not intersections:
                 non_overlapped_segments.append(((time_s, time_e), speaker))
             else:
@@ -118,6 +116,7 @@ class DIARPipe(BasePipeline):
         if vad_result != None: 
             resegmented_diar = self.resegment_result(vad_result=vad_result, diar_result=total_diar)
             resegmented_diar = self.diar_model.split_diar_result(resegmented_diar, chunk_offset=chunk_offset)
+            filtered_diar = self.diar_model.filter_filler(resegmented_diar)
             mapped_result = self.diar_model.map_speaker_info(resegmented_diar, emb_result)
             print(mapped_result)
             return resegmented_diar
