@@ -47,22 +47,22 @@ class AudioFileProcessor:
         else:
             raise TypeError("지원되지 않는 형식입니다: AudioSegment 또는 BytesIO만 지원됩니다.")
 
-    def chunk_audio(self, audio_file, chunk_length=600):
+    def chunk_audio(self, audio_file, chunk_length=600, time_s=None, time_e=None):
         if isinstance(audio_file, BytesIO):
             audio_file.seek(0)
             audio_file = AudioSegment.from_file(audio_file, format="wav")
-        elif isinstance(audio_file, str):
-            audio_file = AudioSegment.from_file(audio_file)
 
-        if chunk_length is None:
-            return [audio_file]
-        
-        if isinstance(audio_file, AudioSegment):
+        if not isinstance(audio_file, AudioSegment):
+            raise TypeError("지원되지 않는 형식입니다: AudioSegment 또는 BytesIO만 지원됩니다.")
+
+        if time_s is not None and time_e is not None:
+            start_ms = int(time_s * 1000)
+            end_ms = int(time_e * 1000)
+            return [audio_file[start_ms:end_ms]]
+        else:
             chunk_length_ms = chunk_length * 1000
             chunks = [audio_file[i:i + chunk_length_ms] for i in range(0, len(audio_file), chunk_length_ms)]
             return chunks
-        else:
-            raise TypeError("지원되지 않는 형식입니다: AudioSegment 또는 BytesIO만 지원됩니다.")
 
     def concat_chunk(self, chunk_list):
         return sum(chunk_list)
