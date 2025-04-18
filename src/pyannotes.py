@@ -187,15 +187,12 @@ class PyannotDIAR(Pyannot):
                             best_key = key
 
                     if best_similarity >= threshold:
-                        # 기존 speaker로 매핑
                         print(f'Mapped {idx2} in chunk {idx} to {best_key}')
                     else:
-                        # 새로운 speaker로 등록
                         speaker_no += 1
                         new_speaker_key = f'speaker_{str(speaker_no).zfill(2)}'
                         speaker_dict[new_speaker_key] = speaker_emb
                         print(f'New speaker {new_speaker_key} registered from {idx2} in chunk {idx}')
-                                        
 
     def save_as_rttm(self, diar_result, output_rttm_path=None, file_name=None):
         '''
