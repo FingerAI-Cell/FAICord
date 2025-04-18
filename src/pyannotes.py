@@ -139,7 +139,6 @@ class PyannotDIAR(Pyannot):
     def resegment_result(self, vad_result, diar_result):
         '''
         Re-segment diar_result using vad_result
-
         - diar_result: [( (start_time, end_time), speaker ), ... ]
         - vad_result: [(start_time, end_time), ...]
 
@@ -165,34 +164,38 @@ class PyannotDIAR(Pyannot):
                     seen_segments.add(segment_key)
         return resegmented_diar
 
-    def map_speaker_info(self, diar_results, embeddings, threshold=0.8):
-        speaker_keys = []
-        speaker_embeddings = []
-        for idx, chunk_embeds in enumerate(embeddings):
-            for idx2, speaker_emb in enumerate(chunk_embeds):
-                speaker_emb = np.array(speaker_emb)  # (256,)
-                if idx == 0:
-                    speaker_keys.append(f'speaker_{str(idx2).zfill(2)}')
-                    speaker_embeddings.append(speaker_emb)
-                else:
-                    speaker_embeddings_arr = np.stack(speaker_embeddings)  # (n_speakers, 256)
-                    
-                    # cosine similarity 한 번에 계산
-                    norm_db = np.linalg.norm(speaker_embeddings_arr, axis=1)
-                    norm_query = np.linalg.norm(speaker_emb)
-                    similarities = (speaker_embeddings_arr @ speaker_emb) / (norm_db * norm_query)
+    def map_speaker_info(self, diar_results, embeddings, threshold=0.65):
+        speaker_dict = dict() 
+        speaker_no = -1 
 
-                    best_idx = np.argmax(similarities)
-                    best_similarity = similarities[best_idx]
+        for idx, chunk_embedding in enumerate(embeddings): 
+            if idx == 0:
+                # 첫 청크: 그냥 등록
+                for idx2, speaker_emb in enumerate(chunk_embedding):
+                    speaker_no += 1
+                    speaker_dict[f'speaker_{str(speaker_no).zfill(2)}'] = speaker_emb
+            else:
+                for idx2, speaker_emb in enumerate(chunk_embedding):
+                    best_similarity = -1
+                    best_key = None
+
+                    for key, value in speaker_dict.items():
+                        emb_similarity = self.calc_emb_similarity(value, speaker_emb)
+                        print(f'emb similarity of {key}-{idx2}, chunk {idx}: {emb_similarity}')
+                        if emb_similarity > best_similarity:
+                            best_similarity = emb_similarity
+                            best_key = key
+
                     if best_similarity >= threshold:
-                        mapped_speaker = speaker_keys[best_idx]
+                        # 기존 speaker로 매핑
+                        print(f'Mapped {idx2} in chunk {idx} to {best_key}')
                     else:
-                        mapped_speaker = f'speaker_{str(len(speaker_keys)).zfill(2)}'
-                        speaker_keys.append(mapped_speaker)
-                        speaker_embeddings.append(speaker_emb)
-                    print(f'Chunk {idx}, Speaker {idx2} mapped to {mapped_speaker} (similarity {best_similarity:.4f})')
-        return speaker_keys
-                                
+                        # 새로운 speaker로 등록
+                        speaker_no += 1
+                        new_speaker_key = f'speaker_{str(speaker_no).zfill(2)}'
+                        speaker_dict[new_speaker_key] = speaker_emb
+                        print(f'New speaker {new_speaker_key} registered from {idx2} in chunk {idx}')
+                                        
 
     def save_as_rttm(self, diar_result, output_rttm_path=None, file_name=None):
         '''
