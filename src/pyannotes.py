@@ -79,7 +79,7 @@ class PyannotDIAR(Pyannot):
     def calc_emb_similarity(self, emb1, emb2):
         from scipy.spatial.distance import cosine
         return 1 - cosine(emb1, emb2)    # cosine()은 distance니까 1 - distance
-
+    
     def get_diar_result(self, pipeline, audio_file, num_speakers=None, return_embeddings=False):
         diarization = pipeline(audio_file, num_speakers=num_speakers, return_embeddings=return_embeddings)
         diar_result = []
@@ -132,45 +132,20 @@ class PyannotDIAR(Pyannot):
                 
                 seg_start = max(start_time, chunk_start)
                 seg_end = min(end_time, chunk_end)
+
                 if seg_end - seg_start > 0:
                     splited_diar_result[chunk_idx].append(((seg_start - chunk_start, seg_end - chunk_start), speaker))
         return [splited_diar_result[idx] for idx in sorted(splited_diar_result)]
 
-    def resegment_result(self, vad_result, diar_result):
-        '''
-        Re-segment diar_result using vad_result
-        - diar_result: [( (start_time, end_time), speaker ), ... ]
-        - vad_result: [(start_time, end_time), ...]
-
-        목적: 
-        1. VAD에 걸친 diar segment만 resegmented_diar에 추가
-        2. VAD에 걸리지 않은 diar segment는 non_overlapped_segments에 추가
-        3. 추가할 때 중복 방지 (set 사용)
-        '''
-        non_overlapped_segments = []
-        resegmented_diar = []
-        vad_tree = IntervalTree(Interval(time_s, time_e) for time_s, time_e in vad_result)
-        seen_segments = set()  # 중복 방지용
-
-        for (time_s, time_e), speaker in diar_result:
-            intersections = vad_tree.overlap(time_s, time_e)           
-            segment_key = (round(time_s, 3), round(time_e, 3), speaker)
-
-            if not intersections:
-                non_overlapped_segments.append(((time_s, time_e), speaker))
-            else:
-                if segment_key not in seen_segments:
-                    resegmented_diar.append(((time_s, time_e), speaker))
-                    seen_segments.add(segment_key)
-        return resegmented_diar
-
     def map_speaker_info(self, diar_results, embeddings, threshold=0.65):
+        '''
+        청크들 간 화자 정보를 매핑해줌
+        '''
         speaker_dict = dict() 
         speaker_no = -1 
 
         for idx, chunk_embedding in enumerate(embeddings): 
-            if idx == 0:
-                # 첫 청크: 그냥 등록
+            if idx == 0:   # 첫 청크: 그냥 등록
                 for idx2, speaker_emb in enumerate(chunk_embedding):
                     speaker_no += 1
                     speaker_dict[f'speaker_{str(speaker_no).zfill(2)}'] = speaker_emb
@@ -178,14 +153,12 @@ class PyannotDIAR(Pyannot):
                 for idx2, speaker_emb in enumerate(chunk_embedding):
                     best_similarity = -1
                     best_key = None
-
                     for key, value in speaker_dict.items():
                         emb_similarity = self.calc_emb_similarity(value, speaker_emb)
                         print(f'emb similarity of {key}-{idx2}, chunk {idx}: {emb_similarity}')
                         if emb_similarity > best_similarity:
                             best_similarity = emb_similarity
                             best_key = key
-
                     if best_similarity >= threshold:
                         print(f'Mapped {idx2} in chunk {idx} to {best_key}')
                     else:

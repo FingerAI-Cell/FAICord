@@ -81,6 +81,34 @@ class DIARPipe(BasePipeline):
             emb_results.append(emb)
         return results, emb_results
 
+    def resegment_result(self, vad_result, diar_result):
+        '''
+        Re-segment diar_result using vad_result
+        - diar_result: [( (start_time, end_time), speaker ), ... ]
+        - vad_result: [(start_time, end_time), ...]
+
+        목적: 
+        1. VAD에 걸친 diar segment만 resegmented_diar에 추가
+        2. VAD에 걸리지 않은 diar segment는 non_overlapped_segments에 추가
+        3. 추가할 때 중복 방지 (set 사용)
+        '''
+        non_overlapped_segments = []
+        resegmented_diar = []
+        vad_tree = IntervalTree(Interval(time_s, time_e) for time_s, time_e in vad_result)
+        seen_segments = set()  # 중복 방지용
+
+        for (time_s, time_e), speaker in diar_result:
+            intersections = vad_tree.overlap(time_s, time_e)           
+            segment_key = (round(time_s, 3), round(time_e, 3), speaker)
+
+            if not intersections:
+                non_overlapped_segments.append(((time_s, time_e), speaker))
+            else:
+                if segment_key not in seen_segments:
+                    resegmented_diar.append(((time_s, time_e), speaker))
+                    seen_segments.add(segment_key)
+        return resegmented_diar
+
     def preprocess_result(self, diar_result, vad_result=None, emb_result=None, chunk_offset=None):
         '''
         resegment, speaker_mapping 
@@ -88,7 +116,7 @@ class DIARPipe(BasePipeline):
         # mapped_result = self.diar_model.map_speaker_info(diar_result)   
         total_diar = self.diar_model.concat_diar_result(diar_result, chunk_offset=chunk_offset)
         if vad_result != None: 
-            resegmented_diar = self.diar_model.resegment_result(vad_result=vad_result, diar_result=total_diar)
+            resegmented_diar = self.resegment_result(vad_result=vad_result, diar_result=total_diar)
             resegmented_diar = self.diar_model.split_diar_result(resegmented_diar, chunk_offset=chunk_offset)
             mapped_result = self.diar_model.map_speaker_info(resegmented_diar, emb_result)
             print(mapped_result)
