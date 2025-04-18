@@ -17,7 +17,7 @@ def main(args):
     
     clean_audio = frontend_pipe.process_audio(args.file_name, chunk_length=300, deverve=True)
     vad_result = vad_pipe.get_vad_timestamp(clean_audio)
-    diar_result, emb_result = diar_pipe.get_diar(args.file_name, chunk_length=300, return_embeddings=True)
+    diar_result, emb_result = diar_pipe.get_diar(args.file_name, chunk_length=300, return_embeddings=False)   # emb 값 사용 x 
     diar_result = diar_pipe.preprocess_result(diar_result=diar_result, vad_result=vad_result, emb_result=emb_result, chunk_offset=300)
     diar_pipe.save_files(diar_result, emb_result, file_name=args.file_name)
     
