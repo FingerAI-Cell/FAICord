@@ -7,6 +7,7 @@ from abc import abstractmethod
 from pydub import AudioSegment
 from io import BytesIO
 import tempfile
+from scipy.spatial.distance import cosine
 
 
 class BasePipeline:
@@ -142,6 +143,19 @@ class PostProcessPipe(BasePipeline):
 
     def get_vectoremb(self):
         pass 
+
+    def calc_emb_similarity(self, emb1, emb2, model_type='sb'):
+        if model_type == 'sb':   # [1, 1, 192] 
+            emb1 = emb1.view(-1).cpu().numpy()
+            emb2 = emb2.view(-1).cpu().numpy()
+            similarity = 1 - cosine(emb1, emb2)
+            print("임베딩 유사도:", similarity)
+        elif model_type == 'wespeaker':
+            emb1 = emb1.view(-1).cpu().numpy()
+            emb2 = emb2.view(-1).cpu().numpy()
+            
+            print(f'임베딩 유사도: {1-cosine(emb1, emb2)}')
+            return 1 - cosine(emb1, emb2)    # cosine()은 distance니까 1 - distance
     
     def cut_audio(self):
         '''
