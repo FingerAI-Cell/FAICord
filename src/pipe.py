@@ -111,7 +111,6 @@ class DIARPipe(BasePipeline):
         '''
         resegment, speaker_mapping 
         '''
-        # mapped_result = self.diar_model.map_speaker_info(diar_result)   
         total_diar = self.diar_model.concat_diar_result(diar_result, chunk_offset=chunk_offset)
         if vad_result != None: 
             resegmented_diar = self.resegment_result(vad_result=vad_result, diar_result=total_diar)
