@@ -48,12 +48,17 @@ class AudioFileProcessor:
             raise TypeError("지원되지 않는 형식입니다: AudioSegment 또는 BytesIO만 지원됩니다.")
 
     def chunk_audio(self, audio_file, chunk_length=600, time_s=None, time_e=None):
+        if isinstance(audio_file, str):
+            if not os.path.isfile(audio_file):
+                raise FileNotFoundError(f"파일을 찾을 수 없습니다: {audio_file}")
+            audio_file = AudioSegment.from_file(audio_file, format="wav")
+
         if isinstance(audio_file, BytesIO):
             audio_file.seek(0)
             audio_file = AudioSegment.from_file(audio_file, format="wav")
 
         if not isinstance(audio_file, AudioSegment):
-            raise TypeError("지원되지 않는 형식입니다: AudioSegment 또는 BytesIO만 지원됩니다.")
+            raise TypeError("지원되지 않는 형식입니다: AudioSegment, BytesIO, 또는 파일 경로(str)만 지원됩니다.")
 
         if time_s is not None and time_e is not None:
             start_ms = int(time_s * 1000)
@@ -66,6 +71,13 @@ class AudioFileProcessor:
 
     def concat_chunk(self, chunk_list):
         return sum(chunk_list)
+
+    def audioseg_to_bytesio(self, audio_file):
+        if isinstance(audio_file, AudioSegment):
+            buffer = BytesIO()
+            audio_file.export(buffer, format="wav")
+            buffer.seek(0)  # 반드시 처음으로 포인터 옮기기
+        return buffer
 
     def bytesio_to_tempfile(self, audio_bytesio):
         """
