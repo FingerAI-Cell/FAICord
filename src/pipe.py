@@ -117,9 +117,9 @@ class DIARPipe(BasePipeline):
             resegmented_diar = self.resegment_result(vad_result=vad_result, diar_result=total_diar)
             resegmented_diar = self.diar_model.split_diar_result(resegmented_diar, chunk_offset=chunk_offset)
             filtered_diar = self.diar_model.filter_filler(resegmented_diar)
-            mapped_result = self.diar_model.map_speaker_info(resegmented_diar, emb_result)
-            print(mapped_result)
-            return resegmented_diar
+            # mapped_result = self.diar_model.map_speaker_info(resegmented_diar, emb_result)
+            non_overlapped_diar = [self.diar_model.remove_overlap(diar_result) for diar_result in filtered_diar]
+            return filtered_diar, non_overlapped_diar
         pass 
 
     def save_files(self, diar_result, emb_result, file_name):
@@ -149,12 +149,10 @@ class PostProcessPipe(BasePipeline):
             emb1 = emb1.view(-1).cpu().numpy()
             emb2 = emb2.view(-1).cpu().numpy()
             similarity = 1 - cosine(emb1, emb2)
-            print("임베딩 유사도:", similarity)
+            return similarity
         elif model_type == 'wespeaker':
             emb1 = emb1.view(-1).cpu().numpy()
-            emb2 = emb2.view(-1).cpu().numpy()
-            
-            print(f'임베딩 유사도: {1-cosine(emb1, emb2)}')
+            emb2 = emb2.view(-1).cpu().numpy()            
             return 1 - cosine(emb1, emb2)    # cosine()은 distance니까 1 - distance
     
     def cut_audio(self):
