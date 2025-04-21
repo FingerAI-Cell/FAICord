@@ -80,7 +80,7 @@ class PyannotDIAR(Pyannot):
         from scipy.spatial.distance import cosine
         return 1 - cosine(emb1, emb2)    # cosine()은 distance니까 1 - distance
     
-    def get_diar_result(self, pipeline, audio_file, num_speakers=None, min_duration=0.3, return_embeddings=False):
+    def get_diar_result(self, pipeline, audio_file, num_speakers=None, min_duration=None, return_embeddings=False):
         diarization = pipeline(audio_file, num_speakers=num_speakers, return_embeddings=return_embeddings)
         diar_result = []
         embeddings = None
@@ -90,21 +90,21 @@ class PyannotDIAR(Pyannot):
                 start_time = segment.start
                 end_time = segment.end
                 duration = end_time - start_time
-                if duration >= min_duration:
-                    segment_key = (round(start_time, 3), round(end_time, 3), speaker)
-                    if segment_key not in seen_segments:
-                        diar_result.append([(start_time, end_time), speaker])
-                        seen_segments.add(segment_key)
+                # if duration >= min_duration:
+                segment_key = (round(start_time, 3), round(end_time, 3), speaker)
+                if segment_key not in seen_segments:
+                    diar_result.append([(start_time, end_time), speaker])
+                    seen_segments.add(segment_key)
         else:
             embeddings = diarization[1]
             for segment, _, speaker in diarization[0].itertracks(yield_label=True):
                 start_time, end_time = segment.start, segment.end
                 duration = end_time - start_time
-                if duration >= min_duration:
-                    segment_key = (round(start_time, 3), round(end_time, 3), speaker)
-                    if segment_key not in seen_segments:
-                        diar_result.append([(start_time, end_time), speaker])
-                        seen_segments.add(segment_key)
+                # if duration >= min_duration:
+                segment_key = (round(start_time, 3), round(end_time, 3), speaker)
+                if segment_key not in seen_segments:
+                    diar_result.append([(start_time, end_time), speaker])
+                    seen_segments.add(segment_key)
         return diar_result, embeddings
 
     def concat_diar_result(self, diar_result, chunk_offset=None):
@@ -140,6 +140,32 @@ class PyannotDIAR(Pyannot):
                 if duration < filter_duration: 
                     diar_result[idx2] = ((time_s, time_e), 'filler')
         return diar_results
+
+    def remove_overlap(self, diar_result):
+        """
+        diar_result: list of ((start_time, end_time), speaker_id)
+        return: 겹치지 않는 깨끗한 segment만 반환
+        """
+        events = []
+        for (start, end), speaker in diar_result:
+            events.append((start, 'start', speaker))
+            events.append((end, 'end', speaker))
+
+        events.sort()
+        active_speakers = set()
+        last_time = None
+        timeline = []
+        for time, event_type, speaker in events:
+            if last_time is not None and time != last_time:
+                if len(active_speakers) == 1:
+                    selected = next(iter(active_speakers))    # 오직 한 명만 active일 때만 저장
+                    timeline.append(((last_time, time), selected))
+            if event_type == 'start':
+                active_speakers.add(speaker)
+            elif event_type == 'end':
+                active_speakers.discard(speaker)
+            last_time = time
+        return timeline
 
     def map_speaker_info(self, diar_results, embeddings, threshold=0.65):
         '''
@@ -179,6 +205,29 @@ class PyannotDIAR(Pyannot):
                 duration = end_time - start_time
                 rttm_line = f"SPEAKER {file_name} 1 {start_time:.3f} {duration:.3f} <NA> <NA> {speaker} <NA> <NA>\n"
                 f.write(rttm_line)
+    
+    def read_rttm(self, file_path):
+        segments = []
+        with open(file_path, 'r') as f:
+            for line in f:
+                if line.strip() == '':
+                    continue  # 빈 줄 스킵
+                parts = line.strip().split()
+                if parts[0] != "SPEAKER":
+                    continue  # 혹시 다른 타입이 있으면 스킵
+                filename = parts[1]
+                start_time = float(parts[3])
+                duration = float(parts[4])
+                speaker_id = parts[7]
+                segment = {
+                    'filename': filename,
+                    'start_time': start_time,
+                    'end_time': start_time + duration,
+                    'duration': duration,
+                    'speaker_id': speaker_id
+                }
+                segments.append(segment)
+        return segments
 
     def save_as_emb(self, embeddings, output_emb_path=None):
         import numpy as np 
