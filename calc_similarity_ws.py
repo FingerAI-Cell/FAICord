@@ -37,6 +37,10 @@ def main(args):
     labels = ['A'] * emb_array_a.shape[0] + ['B'] * emb_array_b.shape[0] + ['C'] * emb_array_c.shape[0]
     emb_visualizer.pca_and_plot(emb_array, labels=labels, title="Wespeaker Embeddings (PCA 2D)")
     emb_visualizer.tsne_and_plot(emb_array, labels=labels, title="Wespeaker Embeddings (t-SNE)")
+    
+    speaker_means = wsemb.calc_speaker_mean_embeddings(emb_array, np.array(labels))
+    sim_matrix, speakers = wsemb.calc_mean_similarity_matrix(speaker_means)
+    emb_visualizer.plot_similarity_heatmap(sim_matrix, speakers=speakers, title='Wespeaker Mean Similarity Heatmap')
 
 
 if __name__ == '__main__':
