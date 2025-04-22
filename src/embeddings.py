@@ -1,5 +1,8 @@
 from speechbrain.inference.speaker import EncoderClassifier
 from speechbrain.inference.speaker import SpeakerRecognition
+from sklearn.decomposition import PCA
+from sklearn.manifold import TSNE
+import matplotlib.pyplot as plt 
 from pydub import AudioSegment
 from io import BytesIO
 import numpy as np
@@ -47,6 +50,23 @@ class WSEMB(BaseEMB):
         embedding = model.extract_embedding(file_name)
         return embedding 
 
+    def get_embeddings(self, model, file_path, file_list):
+        '''
+        여러 파일들을 입력으로 받아 각 파일별 임베딩 리스트 반환 
+        '''
+        emb_list = []
+        for file_name in file_list: 
+            audio_file = os.path.join(file_path, file_name)
+            if isinstance(audio_file, AudioSegment):
+                buffer = BytesIO()
+                audio_file.export(buffer, format='wav')
+                buffer.seek(0)
+                emb = model.extract_embedding(buffer)
+            else:
+                emb = model.extract_embedding(audio_file)
+            emb_list.append(self.prepare_embeddings(emb).squeeze())
+        return emb_list
+
     def get_emb_mean(self, embeddings):
         '''
         embeddings x N  -> np.mean(embeddings)
@@ -73,16 +93,32 @@ class SBEMB(BaseEMB):
             run_opts={"device":self.device}
         )
                                             
-    def get_emb(self, classifier, audio_file):
-        if isinstance(audio_file, AudioSegment):
+    def get_embedding(self, classifier, file_name):
+        if isinstance(file_name, AudioSegment):
             buffer = BytesIO()
-            audio_file.export(buffer, format="wav")
-            buffer.seek(0)  # 반드시 처음으로 포인터 옮기기
+            file_name.export(buffer, format="wav")
+            buffer.seek(0)    # 반드시 처음으로 포인터 옮기기
             signal, fs = torchaudio.load(buffer)
-        signal, fs = torchaudio.load(audio_file)
+        else:
+            signal, fs = torchaudio.load(file_name)
         embeddings = classifier.encode_batch(signal)
         return embeddings
     
+    def get_embeddings(self, classifier, file_path, file_list):
+        emb_list = []
+        for file_name in file_list: 
+            audio_file = os.path.join(file_path, file_name)
+            if isinstance(audio_file, AudioSegment):
+                buffer = BytesIO()
+                audio_file.export(buffer, format='wav')
+                buffer.seek(0)
+                signal, fs = torchaudio.load(buffer) 
+            else:
+                signal, fs = torchaudio.load(audio_file)
+            emb = classifier.encode_batch(signal)
+            emb_list.append(self.prepare_embeddings(emb))
+        return emb_list
+
     def get_emb_mean(self, embeddings):
         '''
         embeddings x N  -> np.mean(embeddings)
@@ -96,7 +132,7 @@ class SBEMB(BaseEMB):
 
 
 class EMBVisualizer(BaseEMB):
-    def __init__(self, config):
+    def __init__(self):
         super().__init__()
 
     def tsne_and_plot(self, embeddings, labels, title):
@@ -120,8 +156,8 @@ class EMBVisualizer(BaseEMB):
         plt.ylabel('t-SNE 2')
         plt.legend()
         plt.grid()
-        plt.savefig(f"{title.replace(' ', '_')}_tsne.png")
-        print(f"Saved plot to {title.replace(' ', '_')}_tsne.png")
+        plt.savefig(f"{title.replace(' ', '_')}.png")
+        print(f"Saved plot to {title.replace(' ', '_')}.png")
 
     def pca_and_plot(self, embeddings, labels, title):
         """
@@ -145,3 +181,4 @@ class EMBVisualizer(BaseEMB):
         plt.legend()
         plt.grid()
         plt.savefig(f"{title.replace(' ', '_')}.png")
+        print(f"Saved plot to {title.replace(' ', '_')}.png")

@@ -1,7 +1,7 @@
 from .audio_handler import NoiseHandler, VoiceEnhancer, AudioVisualizer
 from .preprocessors import AudioFileProcessor
 from .pyannotes import PyannotDIAR, PyannotVAD
-from .speechbrains import SBEMB 
+from .embeddings import SBEMB, WSEMB
 from intervaltree import Interval, IntervalTree
 from abc import abstractmethod
 from pydub import AudioSegment
@@ -141,7 +141,10 @@ class PostProcessPipe(BasePipeline):
         self.audio_file_processor = AudioFileProcessor()
         self.emb_model = SBEMB(emb_config)
 
-    def get_vectoremb(self):
+    def get_speaker_vectoremb(self, diar_result, file_name):
+        '''
+        overlapped 구간 제거된 청크에서 화자별 대표 임베딩 값 구하는 함수 
+        '''
         pass 
 
     def calc_emb_similarity(self, emb1, emb2, model_type='sb'):
@@ -154,12 +157,6 @@ class PostProcessPipe(BasePipeline):
             emb1 = emb1.view(-1).cpu().numpy()
             emb2 = emb2.view(-1).cpu().numpy()            
             return 1 - cosine(emb1, emb2)    # cosine()은 distance니까 1 - distance
-    
-    def cut_audio(self):
-        '''
-        cut audio by timestamp
-        '''
-        pass 
 
     def map_speaker(self):
-        pass 
+        pass
