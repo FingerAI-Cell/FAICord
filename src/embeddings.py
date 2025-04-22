@@ -27,6 +27,13 @@ class BaseEMB:
     def set_gpu(self):
         self.device = torch.device('cuda') if torch.cuda.is_available() else "cpu"
 
+    def prepare_embeddings(self, embeddings):
+        """
+        speechbrain_embs: list of torch.Tensor, shape (1, 1, 192)
+        wespeaker_embs: list of torch.Tensor, shape (256,)
+        """
+        return torch.stack([emb.view(-1) for emb in embeddings]).cpu().numpy() 
+    
 
 class WSEMB(BaseEMB):
     def __init__(self):
@@ -40,6 +47,13 @@ class WSEMB(BaseEMB):
         embedding = model.extract_embedding(file_name)
         return embedding 
 
+    def get_emb_mean(self, embeddings):
+        '''
+        embeddings x N  -> np.mean(embeddings)
+        화자별 대표 임베딩 구하는데 사용하는 함수 
+        '''
+        pass 
+    
 
 class SBEMB(BaseEMB):
     def __init__(self, config):
@@ -69,6 +83,65 @@ class SBEMB(BaseEMB):
         embeddings = classifier.encode_batch(signal)
         return embeddings
     
+    def get_emb_mean(self, embeddings):
+        '''
+        embeddings x N  -> np.mean(embeddings)
+        화자별 대표 임베딩 구하는데 사용하는 함수 
+        '''
+        pass 
+
     def calc_emb_similarity(self, srmodel, audio_file1, audio_file2):
         score, pred = srmodel.verify_files(audio_file1, audio_file2)
         return score, pred 
+
+
+class EMBVisualizer(BaseEMB):
+    def __init__(self, config):
+        super().__init__()
+
+    def tsne_and_plot(self, embeddings, labels, title):
+        """
+        embeddings: numpy array [N, D]
+        labels: list of str (len=N)
+        title: plot title
+        """
+        tsne = TSNE(n_components=2, metric='cosine', perplexity=5, random_state=42)
+        embeddings_2d = tsne.fit_transform(embeddings)
+
+        plt.figure(figsize=(8,6))
+        unique_labels = list(set(labels))
+        colors = plt.colormaps.get_cmap('tab10')
+        for idx, label in enumerate(unique_labels):
+            indices = [i for i, l in enumerate(labels) if l == label]
+            plt.scatter(embeddings_2d[indices, 0], embeddings_2d[indices, 1], label=label, color=colors(idx))
+
+        plt.title(title)
+        plt.xlabel('t-SNE 1')
+        plt.ylabel('t-SNE 2')
+        plt.legend()
+        plt.grid()
+        plt.savefig(f"{title.replace(' ', '_')}_tsne.png")
+        print(f"Saved plot to {title.replace(' ', '_')}_tsne.png")
+
+    def pca_and_plot(self, embeddings, labels, title):
+        """
+        embeddings: numpy array [N, D]
+        labels: list of str (len=N)
+        title: plot title
+        """
+        pca = PCA(n_components=2)
+        embeddings_2d = pca.fit_transform(embeddings)
+
+        plt.figure(figsize=(8,6))
+        unique_labels = list(set(labels))
+        colors = plt.colormaps.get_cmap('tab10')
+        for idx, label in enumerate(unique_labels):
+            indices = [i for i, l in enumerate(labels) if l == label]
+            plt.scatter(embeddings_2d[indices, 0], embeddings_2d[indices, 1], label=label, color=colors(idx))
+
+        plt.title(title)
+        plt.xlabel('PC1')
+        plt.ylabel('PC2')
+        plt.legend()
+        plt.grid()
+        plt.savefig(f"{title.replace(' ', '_')}.png")
