@@ -1,10 +1,12 @@
 from speechbrain.inference.speaker import EncoderClassifier
 from speechbrain.inference.speaker import SpeakerRecognition
+from scipy.spatial.distance import cosine
 from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
 import matplotlib.pyplot as plt 
 from pydub import AudioSegment
 from io import BytesIO
+import seaborn as sns
 import numpy as np
 import torchaudio
 import wespeaker
@@ -36,7 +38,57 @@ class BaseEMB:
         wespeaker_embs: list of torch.Tensor, shape (256,)
         """
         return torch.stack([emb.view(-1) for emb in embeddings]).cpu().numpy() 
+
+    def calc_similarity_matrix(self, embeddings):
+        """
+        embeddings: numpy array [N, D]
+        return: numpy array [N, N] similarity matrix
+        """
+        N = embeddings.shape[0]
+        sim_matrix = np.zeros((N, N))
+        for i in range(N):
+            for j in range(N):
+                sim_matrix[i, j] = 1 - cosine(embeddings[i], embeddings[j])
+        return sim_matrix
     
+    def get_emb_mean(self, embeddings):
+        '''
+        embeddings x N  -> np.mean(embeddings)
+        화자별 대표 임베딩 구하는데 사용하는 함수 
+        '''
+        pass
+    
+    def calc_speaker_mean_embeddings(self, embeddings, labels):
+        """
+        embeddings: numpy array [N, D]
+        labels: list of speaker labels (N개)
+        return: dict {speaker: mean_embedding}
+        """
+        speaker_means = {}
+        unique_speakers = set(labels)
+        for spk in unique_speakers:
+            spk_embs = embeddings[np.array(labels) == spk]
+            mean_emb = spk_embs.mean(axis=0)
+            speaker_means[spk] = mean_emb
+        return speaker_means
+
+    def calc_mean_similarity_matrix(self, speaker_means):
+        """
+        speaker_means: dict {speaker: mean_embedding}
+        return: 2D numpy array (S, S) similarity matrix, S = number of speakers
+        """
+        speakers = list(speaker_means.keys())
+        S = len(speakers)
+        sim_matrix = np.zeros((S, S))
+
+        for i in range(S):
+            for j in range(S):
+                emb_i = speaker_means[speakers[i]]
+                emb_j = speaker_means[speakers[j]]
+                sim = 1 - cosine(emb_i, emb_j)
+                sim_matrix[i, j] = sim
+        return sim_matrix, speakers
+
 
 class WSEMB(BaseEMB):
     def __init__(self):
@@ -66,13 +118,6 @@ class WSEMB(BaseEMB):
                 emb = model.extract_embedding(audio_file)
             emb_list.append(self.prepare_embeddings(emb).squeeze())
         return emb_list
-
-    def get_emb_mean(self, embeddings):
-        '''
-        embeddings x N  -> np.mean(embeddings)
-        화자별 대표 임베딩 구하는데 사용하는 함수 
-        '''
-        pass 
     
 
 class SBEMB(BaseEMB):
@@ -117,14 +162,7 @@ class SBEMB(BaseEMB):
                 signal, fs = torchaudio.load(audio_file)
             emb = classifier.encode_batch(signal)
             emb_list.append(self.prepare_embeddings(emb))
-        return emb_list
-
-    def get_emb_mean(self, embeddings):
-        '''
-        embeddings x N  -> np.mean(embeddings)
-        화자별 대표 임베딩 구하는데 사용하는 함수 
-        '''
-        pass 
+        return emb_list 
 
     def calc_emb_similarity(self, srmodel, audio_file1, audio_file2):
         score, pred = srmodel.verify_files(audio_file1, audio_file2)
@@ -182,3 +220,11 @@ class EMBVisualizer(BaseEMB):
         plt.grid()
         plt.savefig(f"{title.replace(' ', '_')}.png")
         print(f"Saved plot to {title.replace(' ', '_')}.png")
+
+    def plot_similarity_heatmap(self, sim_matrix, speakers, title, cmap='Blues'):
+        plt.figure(figsize=(6,5))
+        sns.heatmap(sim_matrix, xticklabels=speakers, yticklabels=speakers, cmap=cmap, annot=True, fmt=".2f", square=True, cbar=True, vmin=0, vmax=1)
+        plt.title(title)
+        plt.tight_layout()
+        plt.savefig(f"{title.replace(' ', '_')}.png")
+        print(f"Saved heatmap: {title.replace(' ', '_')}.png")
