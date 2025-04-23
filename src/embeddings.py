@@ -81,7 +81,6 @@ class BaseEMB:
         speakers = list(speaker_means.keys())
         S = len(speakers)
         sim_matrix = np.zeros((S, S))
-
         for i in range(S):
             for j in range(S):
                 emb_i = speaker_means[speakers[i]]
