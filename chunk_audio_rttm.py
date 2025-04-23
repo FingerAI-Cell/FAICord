@@ -3,6 +3,7 @@ from src import PyannotDIAR
 import argparse
 import os
 
+
 def main(args):
     audio_file = os.path.join('./dataset/audio/', args.file_name.split('/')[-1].split('.')[0].split('_')[-1] + '.wav')
     audio_p = AudioFileProcessor()

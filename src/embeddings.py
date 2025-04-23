@@ -14,6 +14,7 @@ import random
 import torch
 import os 
 
+
 class BaseEMB:
     def __init__(self):
         self.set_seed()
