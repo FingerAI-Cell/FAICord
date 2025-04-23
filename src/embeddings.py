@@ -1,5 +1,5 @@
-from speechbrain.inference.speaker import EncoderClassifier
 from speechbrain.inference.speaker import SpeakerRecognition
+from speechbrain.inference.speaker import EncoderClassifier
 from scipy.spatial.distance import cosine
 from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
