@@ -18,9 +18,11 @@ def main(args):
     clean_audio = frontend_pipe.process_audio(args.file_name, chunk_length=300, deverve=True)
     vad_result = vad_pipe.get_vad_timestamp(clean_audio)
     diar_result, emb_result = diar_pipe.get_diar(args.file_name, chunk_length=300, return_embeddings=False)   # emb 값 사용 x 
-    diar_result = diar_pipe.preprocess_result(diar_result=diar_result, vad_result=vad_result, emb_result=emb_result, chunk_offset=300)
+    diar_result, non_overlapped_diar = diar_pipe.preprocess_result(diar_result=diar_result, vad_result=vad_result, emb_result=emb_result, chunk_offset=300)
     diar_pipe.save_files(diar_result, emb_result, file_name=args.file_name)
-    
+    file_name = args.file_name.split('/')[-1].split('.')[0] 
+    overlapped_file = args.file_name.replace(file_name, 'non_overlapped_' + file_name)
+    diar_pipe.save_files(non_overlapped_diar, emb_result, file_name=overlapped_file)
 
 if __name__ == '__main__':
     cli_parser = argparse.ArgumentParser()
