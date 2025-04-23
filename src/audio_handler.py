@@ -168,7 +168,6 @@ class VoiceEnhancer:
 
         expanded_mask = np.repeat(mask, len(y) // len(mask) + 1)[:len(y)]   # RMS 값을 전체 신호 길이에 맞게 확장
         y_filtered = y * expanded_mask.astype(float)   # 입력 신호에 확장된 마스크 적용
-
         if output_file:
             sf.write(output_file, y_filtered, sr)   # 강조된 오디오 저장
             print(f"Saved emphasized audio to {output_file}")
