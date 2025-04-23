@@ -2,6 +2,7 @@ from .audio_handler import NoiseHandler, VoiceEnhancer, AudioVisualizer
 from .preprocessors import AudioFileProcessor
 from .pyannotes import PyannotDIAR, PyannotVAD
 from .embeddings import SBEMB, WSEMB
+from .clusters import KNNCluster
 from intervaltree import Interval, IntervalTree
 from abc import abstractmethod
 from pydub import AudioSegment
@@ -63,6 +64,9 @@ class VADPipe(BasePipeline):
 
 
 class DIARPipe(BasePipeline):
+    '''
+    resegment: DIAR <-> VAD mapping -> calc Non-Overlapped timeline 
+    '''
     def set_env(self, diar_config):
         self.diar_model = PyannotDIAR()
         self.diar_config = diar_config 
@@ -83,7 +87,7 @@ class DIARPipe(BasePipeline):
             emb_results.append(emb)
         return results, emb_results
 
-    def resegment_result(self, vad_result, diar_result):
+    def apply_vad(self, vad_result, diar_result):
         '''
         Re-segment diar_result using vad_result
         - diar_result: [( (start_time, end_time), speaker ), ... ]
@@ -91,10 +95,10 @@ class DIARPipe(BasePipeline):
 
         1. VAD에 걸친 diar segment만 resegmented_diar에 추가
         2. VAD에 걸리지 않은 diar segment는 non_overlapped_segments에 추가
-        3. 추가할 때 중복 방지 (set 사용)
+        # 3. 추가할 때 중복 방지 (set 사용)
         '''
         non_overlapped_segments = []
-        resegmented_diar = []
+        vad_diar = []
         vad_tree = IntervalTree(Interval(time_s, time_e) for time_s, time_e in vad_result)
         seen_segments = set()    # 중복 방지용
         for (time_s, time_e), speaker in diar_result:
@@ -104,9 +108,9 @@ class DIARPipe(BasePipeline):
                 non_overlapped_segments.append(((time_s, time_e), speaker))
             else:
                 if segment_key not in seen_segments:
-                    resegmented_diar.append(((time_s, time_e), speaker))
+                    vad_diar.append(((time_s, time_e), speaker))
                     seen_segments.add(segment_key)
-        return resegmented_diar
+        return vad_diar
 
     def preprocess_result(self, diar_result, vad_result=None, emb_result=None, chunk_offset=None):
         '''
@@ -114,19 +118,19 @@ class DIARPipe(BasePipeline):
         '''
         total_diar = self.diar_model.concat_diar_result(diar_result, chunk_offset=chunk_offset)
         if vad_result != None: 
-            resegmented_diar = self.resegment_result(vad_result=vad_result, diar_result=total_diar)
-            resegmented_diar = self.diar_model.split_diar_result(resegmented_diar, chunk_offset=chunk_offset)
-            filtered_diar = self.diar_model.filter_filler(resegmented_diar)
-            # mapped_result = self.diar_model.map_speaker_info(resegmented_diar, emb_result)
+            vad_diar = self.apply_vad(vad_result=vad_result, diar_result=total_diar)
+            vad_diar = self.diar_model.split_diar_result(vad_diar, chunk_offset=chunk_offset)
+            filtered_diar = self.diar_model.filter_filler(vad_diar)
             non_overlapped_diar = [self.diar_model.remove_overlap(diar_result) for diar_result in filtered_diar]
             return filtered_diar, non_overlapped_diar
-        pass 
 
     def save_files(self, diar_result, emb_result, file_name):
         '''
         save diar result, numpy emb as rttm, npy format for each chunk
         '''
+        print(f'1: {file_name}')
         save_file_name = file_name.split('/')[-1].split('.')[0]
+        print(f'2: {save_file_name}')
         for idx, chunk_diar in enumerate(diar_result):
             if len(diar_result) > 1: 
                 save_file_name = f"chunk_{idx}_{file_name.split('/')[-1].split('.')[0]}"
@@ -137,9 +141,17 @@ class DIARPipe(BasePipeline):
 
 
 class PostProcessPipe(BasePipeline):
+    '''
+    filler 처리된 diar result와, non-overlapped diar 후처리하는 클래스. 
+    1. non-overlapped diar에서 화자별 임베딩 계산 
+    2. 청크 내 화자 재레이블링 (KNN)
+    3. 청크별 화자별 대표 임베딩 계산 
+    4. 청크 병합 (화자 정보 매핑)
+    '''
     def set_env(self, emb_config):
         self.audio_file_processor = AudioFileProcessor()
-        self.emb_model = SBEMB(emb_config)
+        self.emb_model = WSEMB()
+        self.cluster = KNNCluster()
 
     def get_speaker_vectoremb(self, diar_result, file_name):
         '''
