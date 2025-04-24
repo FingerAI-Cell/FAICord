@@ -201,7 +201,7 @@ class EMBVisualizer(BaseEMB):
     def __init__(self):
         super().__init__()
 
-    def tsne_and_plot(self, embeddings, labels, title):
+    def tsne_and_plot(self, embeddings, labels, title, file_path=None):
         """
         embeddings: numpy array [N, D]
         labels: list of str (len=N)
@@ -222,10 +222,11 @@ class EMBVisualizer(BaseEMB):
         plt.ylabel('t-SNE 2')
         plt.legend()
         plt.grid()
-        plt.savefig(f"{title.replace(' ', '_')}.png")
-        print(f"Saved plot to {title.replace(' ', '_')}.png")
+        if file_path != None: 
+            plt.savefig(f"{os.path.join(file_path, title.replace(' ', '_'))}.png")
+            print(f"Saved plot to {title.replace(' ', '_')}.png")
 
-    def pca_and_plot(self, embeddings, labels, title):
+    def pca_and_plot(self, embeddings, labels, title, file_path=None):
         """
         embeddings: numpy array [N, D]
         labels: list of str (len=N)
@@ -246,13 +247,15 @@ class EMBVisualizer(BaseEMB):
         plt.ylabel('PC2')
         plt.legend()
         plt.grid()
-        plt.savefig(f"{title.replace(' ', '_')}.png")
-        print(f"Saved plot to {title.replace(' ', '_')}.png")
+        if file_path != None: 
+            plt.savefig(f"{os.path.join(file_path, title.replace(' ', '_'))}.png")
+            print(f"Saved plot to {title.replace(' ', '_')}.png")
 
-    def plot_similarity_heatmap(self, sim_matrix, speakers, title, cmap='Blues'):
+    def plot_similarity_heatmap(self, sim_matrix, speakers, title, cmap='Blues', file_path=None):
         plt.figure(figsize=(6,5))
         sns.heatmap(sim_matrix, xticklabels=speakers, yticklabels=speakers, cmap=cmap, annot=True, fmt=".2f", square=True, cbar=True, vmin=0, vmax=1)
         plt.title(title)
         plt.tight_layout()
-        plt.savefig(f"{title.replace(' ', '_')}.png")
-        print(f"Saved heatmap: {title.replace(' ', '_')}.png")
+        if file_path != None:
+            plt.savefig(f"{os.path.join(file_path, title.replace(' ', '_'))}.png")
+            print(f"Saved heatmap: {title.replace(' ', '_')}.png")
