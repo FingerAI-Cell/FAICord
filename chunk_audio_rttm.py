@@ -11,6 +11,7 @@ def main(args):
     rttm_file = pyannot_diar.read_rttm(args.file_name)
     
     chunk_idx = int(args.file_name.split('/')[-1].split('_')[1])
+    
     for idx, rttm in enumerate(rttm_file): 
         if rttm['speaker_id'] == args.speaker_info and rttm['duration'] > 1.0:
             time_s, time_e = rttm['start_time'] + chunk_idx * 300, rttm['end_time'] + chunk_idx * 300
