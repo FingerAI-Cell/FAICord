@@ -157,20 +157,45 @@ class PostProcessPipe(BasePipeline):
         self.knn_cluster = KNNCluster()
 
     def relabel_speaker(self, file_name, diar_result, k=5, chunk_offset=300):
-        relabeled_diar = [] 
-        for idx, diar in enumerate(diar_result): 
-            print(diar)
-            emb_result = self.wsemb.get_embeddings_from_diar(self.emb_model, file_name, diar, chunk_offset=idx*chunk_offset)
+        relabeled_diar_result = []
+        audio_file_name = file_name.split('/')[-1].split('.')[0]
+        for idx, diar in enumerate(diar_result):
+            emb_result = self.wsemb.get_embeddings_from_diar(
+                self.emb_model, file_name, diar, chunk_offset=idx*chunk_offset
+            )
             embeddings = [emb for (_, _, emb) in emb_result]
             original_labels = [speaker for (_, speaker, _) in emb_result]
-
             emb_array = np.vstack(embeddings)
-            self.emb_visualizer.pca_and_plot(emb_array, labels=original_labels, title=f"Wespeaker Embeddings_{idx} (PCA 2D)")
-            self.emb_visualizer.tsne_and_plot(emb_array, labels=original_labels, title=f"Wespeaker Embeddings_{idx} (tsne 2D)")
+            self.emb_visualizer.pca_and_plot(emb_array, labels=original_labels, file_path='./dataset/img/pca',
+                                            title=f"Wespeaker Embeddings_{audio_file_name}_{idx} (PCA 2D)")
+            self.emb_visualizer.tsne_and_plot(emb_array, labels=original_labels, file_path='./dataset/img/t-sne',
+                                            title=f"Wespeaker Embeddings_{audio_file_name}_{idx} (tsne 2D)")
             new_labels = self.knn_cluster.relabel_by_knn(np.array(embeddings), original_labels, k=k)
-            self.emb_visualizer.pca_and_plot(emb_array, labels=new_labels, title=f"Wespeaker new Embeddings_{idx} (PCA 2D)")
-            self.emb_visualizer.tsne_and_plot(emb_array, labels=new_labels, title=f"Wespeaker new Embeddings_{idx} (tsne 2D)")
-            # print(emb_result)
+            emb_segment_set = set((start, end) for ((start, end), _, _) in emb_result)
+
+            emb_idx = 0
+            relabeled_diar = []
+            for segment in diar:
+                (start, end), original_label = segment
+                if original_label == 'filler':
+                    relabeled_diar.append(segment)
+                    print(f"[FILLER] ({start:.2f}-{end:.2f}) filler --> 유지")
+                elif (start, end) in emb_segment_set:
+                    # 실제 embedding이 있는 경우만 new_label 적용
+                    new_label = new_labels[emb_idx]
+                    relabeled_diar.append(((start, end), new_label))
+                    print(f"({start:.2f}-{end:.2f}) Original: {original_label} --> New: {new_label}")
+                    emb_idx += 1
+                else:
+                    # 1초 미만으로 embedding이 없었던 경우
+                    relabeled_diar.append(segment)
+                    print(f"[SHORT] ({start:.2f}-{end:.2f}) {original_label} --> 유지")
+            self.emb_visualizer.pca_and_plot(emb_array, labels=new_labels, file_path='./dataset/img/pca',
+                                            title=f"Wespeaker new Embeddings_{audio_file_name}_{idx} (PCA 2D)")
+            self.emb_visualizer.tsne_and_plot(emb_array, labels=new_labels, file_path='./dataset/img/t-sne',
+                                            title=f"Wespeaker new Embeddings_{audio_file_name}_{idx} (tsne 2D)")
+            relabeled_diar_result.append(relabeled_diar)
+        return relabeled_diar_result
 
     def get_speaker_vectoremb(self, diar_result, file_name):
         '''
