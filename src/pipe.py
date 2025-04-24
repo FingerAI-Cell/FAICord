@@ -1,14 +1,15 @@
 from .audio_handler import NoiseHandler, VoiceEnhancer, AudioVisualizer
 from .preprocessors import AudioFileProcessor
 from .pyannotes import PyannotDIAR, PyannotVAD
-from .embeddings import SBEMB, WSEMB
+from .embeddings import SBEMB, WSEMB, EMBVisualizer
 from .clusters import KNNCluster
 from intervaltree import Interval, IntervalTree
+from scipy.spatial.distance import cosine
 from abc import abstractmethod
 from pydub import AudioSegment
 from io import BytesIO
+import numpy as np
 import tempfile
-from scipy.spatial.distance import cosine
 
 
 class BasePipeline:
@@ -124,7 +125,7 @@ class DIARPipe(BasePipeline):
             non_overlapped_diar = [self.diar_model.remove_overlap(diar_result) for diar_result in filtered_diar]
             return filtered_diar, non_overlapped_diar
 
-    def save_files(self, diar_result, emb_result, file_name):
+    def save_files(self, diar_result, file_name, emb_result=None):
         '''
         save diar result, numpy emb as rttm, npy format for each chunk
         '''
@@ -137,7 +138,7 @@ class DIARPipe(BasePipeline):
             save_rttm_path = './dataset/rttm/' + save_file_name + '.rttm'
             save_emb_path = './dataset/emb/' + save_file_name + '.npy'
             self.diar_model.save_as_rttm(chunk_diar, output_rttm_path=save_rttm_path, file_name=save_file_name)
-            self.diar_model.save_as_emb(emb_result[idx], output_emb_path=save_emb_path)
+            #self.diar_model.save_as_emb(emb_result[idx], output_emb_path=save_emb_path)
 
 
 class PostProcessPipe(BasePipeline):
@@ -148,14 +149,32 @@ class PostProcessPipe(BasePipeline):
     3. 청크별 화자별 대표 임베딩 계산 
     4. 청크 병합 (화자 정보 매핑)
     '''
-    def set_env(self, emb_config):
+    def set_env(self):
         self.audio_file_processor = AudioFileProcessor()
-        self.emb_model = WSEMB()
-        self.cluster = KNNCluster()
+        self.wsemb = WSEMB()
+        self.emb_model = self.wsemb.load_model()
+        self.emb_visualizer = EMBVisualizer()
+        self.knn_cluster = KNNCluster()
+
+    def relabel_speaker(self, file_name, diar_result, k=5, chunk_offset=300):
+        relabeled_diar = [] 
+        for idx, diar in enumerate(diar_result): 
+            print(diar)
+            emb_result = self.wsemb.get_embeddings_from_diar(self.emb_model, file_name, diar, chunk_offset=idx*chunk_offset)
+            embeddings = [emb for (_, _, emb) in emb_result]
+            original_labels = [speaker for (_, speaker, _) in emb_result]
+
+            emb_array = np.vstack(embeddings)
+            self.emb_visualizer.pca_and_plot(emb_array, labels=original_labels, title=f"Wespeaker Embeddings_{idx} (PCA 2D)")
+            self.emb_visualizer.tsne_and_plot(emb_array, labels=original_labels, title=f"Wespeaker Embeddings_{idx} (tsne 2D)")
+            new_labels = self.knn_cluster.relabel_by_knn(np.array(embeddings), original_labels, k=k)
+            self.emb_visualizer.pca_and_plot(emb_array, labels=new_labels, title=f"Wespeaker new Embeddings_{idx} (PCA 2D)")
+            self.emb_visualizer.tsne_and_plot(emb_array, labels=new_labels, title=f"Wespeaker new Embeddings_{idx} (tsne 2D)")
+            # print(emb_result)
 
     def get_speaker_vectoremb(self, diar_result, file_name):
         '''
-        overlapped 구간 제거된 청크에서 화자별 대표 임베딩 값 구하는 함수 
+        non-overlapped diar result를 입력으로 받아 
         '''
         pass 
 
