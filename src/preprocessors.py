@@ -76,7 +76,7 @@ class AudioFileProcessor:
         if isinstance(audio_file, AudioSegment):
             buffer = BytesIO()
             audio_file.export(buffer, format="wav")
-            buffer.seek(0)  # 반드시 처음으로 포인터 옮기기
+            buffer.seek(0)     # 반드시 처음으로 포인터 옮기기
         return buffer
 
     def bytesio_to_tempfile(self, audio_bytesio):
