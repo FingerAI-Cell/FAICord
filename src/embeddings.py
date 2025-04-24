@@ -102,7 +102,7 @@ class WSEMB(BaseEMB):
         embedding = model.extract_embedding(file_name)
         return embedding 
 
-    def get_embeddings(self, model, file_path, file_list):
+    def get_embeddings_from_file(self, model, file_path, file_list):
         '''
         여러 파일들을 입력으로 받아 각 파일별 임베딩 리스트 반환 
         '''
@@ -118,6 +118,34 @@ class WSEMB(BaseEMB):
                 emb = model.extract_embedding(audio_file)
             emb_list.append(self.prepare_embeddings(emb).squeeze())
         return emb_list
+
+    def get_embeddings_from_diar(self, model, file_name, diar_result, chunk_offset=0):
+        '''
+        diar_result: List of ((start_time, end_time), speaker)
+        file_name: path to audio file (.wav)
+        return: List of ((start_time, end_time), speaker, embedding)
+        '''
+        audio = AudioSegment.from_wav(file_name)
+        emb_results = []
+        for (time_s, time_e), speaker in diar_result:
+            if speaker == 'filler':
+                continue 
+
+            start_ms = int(time_s + chunk_offset) * 1000 
+            end_ms = int(time_e + chunk_offset) * 1000
+            if (end_ms - start_ms) < 1000:  # 1초 미만
+                # print(f"[SKIP] Short segment ({time_s:.2f}s ~ {time_e:.2f}s, {end_ms - start_ms}ms) skipped.")
+                continue
+
+            segment = audio[start_ms:end_ms]
+            buffer = BytesIO()
+            segment.export(buffer, format="wav")
+            buffer.seek(0)
+            
+            emb = model.extract_embedding(buffer)
+            emb = self.prepare_embeddings(emb).squeeze()  # (D,) 형태로 정리
+            emb_results.append(((time_s, time_e), speaker, emb))
+        return emb_results
     
 
 class SBEMB(BaseEMB):
