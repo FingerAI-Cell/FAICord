@@ -138,7 +138,7 @@ class DIARPipe(BasePipeline):
             save_rttm_path = './dataset/rttm/' + save_file_name + '.rttm'
             save_emb_path = './dataset/emb/' + save_file_name + '.npy'
             self.diar_model.save_as_rttm(chunk_diar, output_rttm_path=save_rttm_path, file_name=save_file_name)
-            #self.diar_model.save_as_emb(emb_result[idx], output_emb_path=save_emb_path)
+            # self.diar_model.save_as_emb(emb_result[idx], output_emb_path=save_emb_path)
 
 
 class PostProcessPipe(BasePipeline):
@@ -180,14 +180,12 @@ class PostProcessPipe(BasePipeline):
                 if original_label == 'filler':
                     relabeled_diar.append(segment)
                     print(f"[FILLER] ({start:.2f}-{end:.2f}) filler --> 유지")
-                elif (start, end) in emb_segment_set:
-                    # 실제 embedding이 있는 경우만 new_label 적용
+                elif (start, end) in emb_segment_set:   # 실제 embedding이 있는 경우만 new_label 적용
                     new_label = new_labels[emb_idx]
                     relabeled_diar.append(((start, end), new_label))
                     print(f"({start:.2f}-{end:.2f}) Original: {original_label} --> New: {new_label}")
                     emb_idx += 1
-                else:
-                    # 1초 미만으로 embedding이 없었던 경우
+                else:   # 1초 미만으로 embedding이 없었던 경우
                     relabeled_diar.append(segment)
                     print(f"[SHORT] ({start:.2f}-{end:.2f}) {original_label} --> 유지")
             self.emb_visualizer.pca_and_plot(emb_array, labels=new_labels, file_path='./dataset/img/pca',
