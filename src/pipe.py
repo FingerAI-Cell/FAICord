@@ -166,12 +166,13 @@ class PostProcessPipe(BasePipeline):
             emb_result = self.wsemb.get_embeddings_from_diar(
                 self.emb_model, file_name, diar, chunk_offset=idx*chunk_offset
             )
+            emb_segment_set = set((start, end) for ((start, end), _, _) in emb_result)
             embeddings = [emb for (_, _, emb) in emb_result]
             original_labels = [speaker for (_, speaker, _) in emb_result]
             emb_array = np.vstack(embeddings)
             
             new_labels = self.knn_cluster.relabel_by_knn(np.array(embeddings), original_labels, k=k)
-            emb_segment_set = set((start, end) for ((start, end), _, _) in emb_result)
+            
 
             emb_idx = 0
             relabeled_diar = []
