@@ -171,7 +171,7 @@ class PostProcessPipe(BasePipeline):
             original_labels = [speaker for (_, speaker, _) in emb_result]
             emb_array = np.vstack(embeddings)
             
-            new_labels = self.knn_cluster.relabel_by_knn(np.array(embeddings), original_labels, k=k)
+            new_labels = self.knn_cluster.relabel_by_knn(emb_array, original_labels, k=k)
             emb_idx = 0
             relabeled_diar = []
             for segment in diar:
