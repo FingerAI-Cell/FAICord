@@ -96,7 +96,6 @@ class DIARPipe(BasePipeline):
 
         1. VAD에 걸친 diar segment만 resegmented_diar에 추가
         2. VAD에 걸리지 않은 diar segment는 non_overlapped_segments에 추가
-        # 3. 추가할 때 중복 방지 (set 사용)
         '''
         non_overlapped_segments = []
         vad_diar = []
@@ -157,6 +156,10 @@ class PostProcessPipe(BasePipeline):
         self.knn_cluster = KNNCluster()
 
     def relabel_speaker(self, file_name, diar_result, k=5, chunk_offset=300):
+        '''
+        input: non overlapped diar result, diar result 
+        return: relabeled diar result 
+        '''
         relabeled_diar_result = []
         audio_file_name = file_name.split('/')[-1].split('.')[0]
         for idx, diar in enumerate(diar_result):
@@ -166,10 +169,7 @@ class PostProcessPipe(BasePipeline):
             embeddings = [emb for (_, _, emb) in emb_result]
             original_labels = [speaker for (_, speaker, _) in emb_result]
             emb_array = np.vstack(embeddings)
-            self.emb_visualizer.pca_and_plot(emb_array, labels=original_labels, file_path='./dataset/img/pca',
-                                            title=f"Wespeaker Embeddings_{audio_file_name}_{idx} (PCA 2D)")
-            self.emb_visualizer.tsne_and_plot(emb_array, labels=original_labels, file_path='./dataset/img/t-sne',
-                                            title=f"Wespeaker Embeddings_{audio_file_name}_{idx} (tsne 2D)")
+            
             new_labels = self.knn_cluster.relabel_by_knn(np.array(embeddings), original_labels, k=k)
             emb_segment_set = set((start, end) for ((start, end), _, _) in emb_result)
 
@@ -188,6 +188,10 @@ class PostProcessPipe(BasePipeline):
                 else:   # 1초 미만으로 embedding이 없었던 경우
                     relabeled_diar.append(segment)
                     print(f"[SHORT] ({start:.2f}-{end:.2f}) {original_label} --> 유지")
+            self.emb_visualizer.pca_and_plot(emb_array, labels=original_labels, file_path='./dataset/img/pca',
+                                            title=f"Wespeaker Embeddings_{audio_file_name}_{idx} (PCA 2D)")
+            self.emb_visualizer.tsne_and_plot(emb_array, labels=original_labels, file_path='./dataset/img/t-sne',
+                                            title=f"Wespeaker Embeddings_{audio_file_name}_{idx} (tsne 2D)")
             self.emb_visualizer.pca_and_plot(emb_array, labels=new_labels, file_path='./dataset/img/pca',
                                             title=f"Wespeaker new Embeddings_{audio_file_name}_{idx} (PCA 2D)")
             self.emb_visualizer.tsne_and_plot(emb_array, labels=new_labels, file_path='./dataset/img/t-sne',
