@@ -155,7 +155,7 @@ class PostProcessPipe(BasePipeline):
         self.emb_visualizer = EMBVisualizer()
         self.knn_cluster = KNNCluster()
 
-    def relabel_speaker(self, file_name, diar_result, k=5, chunk_offset=300):
+    def prepare_nonoverlapped_labels(self, file_name, diar_result, k=5, chunk_offset=300):
         '''
         input: non overlapped diar result, diar result 
         return: relabeled diar result 
@@ -172,8 +172,6 @@ class PostProcessPipe(BasePipeline):
             emb_array = np.vstack(embeddings)
             
             new_labels = self.knn_cluster.relabel_by_knn(np.array(embeddings), original_labels, k=k)
-            
-
             emb_idx = 0
             relabeled_diar = []
             for segment in diar:
