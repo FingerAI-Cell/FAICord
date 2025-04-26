@@ -68,17 +68,18 @@ class DIARPipe(BasePipeline):
     '''
     resegment: DIAR <-> VAD mapping -> calc Non-Overlapped timeline 
     '''
-    def set_env(self, diar_config):
+    def set_env(self, diar_config, chunk_offset=300):
         self.diar_model = PyannotDIAR()
         self.diar_config = diar_config 
         self.audio_visualizer = AudioVisualizer()
         self.audio_file_processor = AudioFileProcessor()
-
-    def get_diar(self, audio_file, chunk_length=300, num_speakers=None, return_embeddings=False):
+        self.chunk_offset=chunk_offset
+        
+    def get_diar(self, audio_file, num_speakers=None, return_embeddings=False):
         '''audio_file: AudioSeg'''
         diar_pipe = self.diar_model.load_pipeline_from_pretrained(self.diar_config)
         audio_seg = self.audio_file_processor.audiofile_to_AudioSeg(audio_file) 
-        chunks = self.audio_file_processor.chunk_audio(audio_seg, chunk_length=chunk_length)
+        chunks = self.audio_file_processor.chunk_audio(audio_seg, chunk_length=self.chunk_offset)
         results = []; emb_results = []
         for idx, chunk in enumerate(chunks):
             with tempfile.NamedTemporaryFile(suffix=".wav") as temp_audio:
@@ -112,14 +113,14 @@ class DIARPipe(BasePipeline):
                     seen_segments.add(segment_key)
         return vad_diar
 
-    def preprocess_result(self, diar_result, vad_result=None, emb_result=None, chunk_offset=None):
+    def preprocess_result(self, diar_result, vad_result=None, emb_result=None):
         '''
         resegment, speaker_mapping 
         '''
-        total_diar = self.diar_model.concat_diar_result(diar_result, chunk_offset=chunk_offset)
+        total_diar = self.diar_model.concat_diar_result(diar_result, chunk_offset=self.chunk_offset)
         if vad_result != None: 
             vad_diar = self.apply_vad(vad_result=vad_result, diar_result=total_diar)
-            vad_diar = self.diar_model.split_diar_result(vad_diar, chunk_offset=chunk_offset)
+            vad_diar = self.diar_model.split_diar_result(vad_diar, chunk_offset=self.chunk_offset)
             filtered_diar = self.diar_model.filter_filler(vad_diar)
             non_overlapped_diar = [self.diar_model.remove_overlap(diar_result) for diar_result in filtered_diar]
             return filtered_diar, non_overlapped_diar
