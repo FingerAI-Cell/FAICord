@@ -158,8 +158,8 @@ class PostProcessPipe(BasePipeline):
 
     def prepare_nonoverlapped_labels(self, file_name, diar_result, k=5, chunk_offset=300):
         '''
-        input: non overlapped diar result, diar result 
-        return: relabeled diar result 
+        input: non overlapped diar result 
+        return: relabeled non overlapped diar result 
         '''
         relabeled_diar_result = []
         audio_file_name = file_name.split('/')[-1].split('.')[0]
@@ -180,12 +180,12 @@ class PostProcessPipe(BasePipeline):
                 if original_label == 'filler':
                     relabeled_diar.append(segment)
                     print(f"[FILLER] ({start:.2f}-{end:.2f}) filler --> 유지")
-                elif (start, end) in emb_segment_set:   # 실제 embedding이 있는 경우만 new_label 적용
+                elif (start, end) in emb_segment_set:    # 실제 embedding이 있는 경우만 new_label 적용
                     new_label = new_labels[emb_idx]
                     relabeled_diar.append(((start, end), new_label))
                     print(f"({start:.2f}-{end:.2f}) Original: {original_label} --> New: {new_label}")
                     emb_idx += 1
-                else:   # 1초 미만으로 embedding이 없었던 경우
+                else:    # 1초 미만으로 embedding이 없었던 경우
                     relabeled_diar.append(segment)
                     print(f"[SHORT] ({start:.2f}-{end:.2f}) {original_label} --> 유지")
             self.emb_visualizer.pca_and_plot(emb_array, labels=original_labels, file_path='./dataset/img/pca',
@@ -199,9 +199,36 @@ class PostProcessPipe(BasePipeline):
             relabeled_diar_result.append(relabeled_diar)
         return relabeled_diar_result
 
+    def apply_labels_to_full_diar(self, full_diar, relabeled_nonoverlap_diar):
+        '''
+        full_diar[0]: chunk 0 diar    - [((start, end), speaker), ((start, end), speaker), ... ]  
+        full_diar[1]: chunk 1 diar    -                         '' 
+        '''
+        # Step 1: flatten relabeled_nonoverlap_diar
+        # print(full_diar[:2], end='\n\n')
+        # print(relabeled_nonoverlap_diar[:3])
+        relabeled_full_diar = [] 
+        for idx, chunk in enumerate(full_diar):
+            chunk_diar = [] 
+            for (full_start, full_end), full_label in full_diar[idx]:
+                overlap_segments = []
+                for (rel_start, rel_end), rel_label in relabeled_nonoverlap_diar[idx]:
+                    overlap_start = max(full_start, rel_start)
+                    overlap_end = min(full_end, rel_end)
+                    overlap_duration = max(0, overlap_end - overlap_start)
+                    if overlap_duration > 0:
+                        overlap_segments.append((overlap_duration, rel_label))
+                if overlap_segments:
+                    best_label = max(overlap_segments, key=lambda x: x[0])[1]
+                else:
+                    best_label = full_label  # fallback
+                chunk_diar.append(((full_start, full_end), best_label))
+            relabeled_full_diar.append(chunk_diar)
+        return relabeled_full_diar
+
     def get_speaker_vectoremb(self, diar_result, file_name):
         '''
-        non-overlapped diar result를 입력으로 받아 
+        조정된 non-overlapped diar result를 입력으로 받아 기존의 diar result 수정 및 최종 화자 구분 결과 획득  
         '''
         pass 
 
@@ -216,5 +243,4 @@ class PostProcessPipe(BasePipeline):
             emb2 = emb2.view(-1).cpu().numpy()            
             return 1 - cosine(emb1, emb2)    # cosine()은 distance니까 1 - distance
 
-    def map_speaker(self):
-        pass
+     
