@@ -27,10 +27,11 @@ def main(args):
     vad_result = vad_pipe.get_vad_timestamp(clean_audio)
     diar_result, _ = diar_pipe.get_diar(args.file_name, return_embeddings=False)   # emb 값 사용 x 
     processed_diar, non_overlapped_diar = diar_pipe.preprocess_result(diar_result=diar_result, vad_result=vad_result)    # ok. 
-    relabeld_diar = postprocess_pipe.prepare_nonoverlapped_labels(args.file_name, non_overlapped_diar)
+    relabeled_diar = postprocess_pipe.prepare_nonoverlapped_labels(args.file_name, non_overlapped_diar)
+    final_diar = postprocess_pipe.apply_labels_to_full_diar(processed_diar, relabeled_diar)
     
-    diar_pipe.save_files(processed_diar, file_name=args.file_name)
-    file_name = args.file_name.split('/')[-1].split('.')[0]
+    diar_pipe.save_files(final_diar, file_name=args.file_name)
+    file_name = args.file_name.split('/')[-1].split('.')[0] 
     overlapped_file = args.file_name.replace(file_name, 'non_overlapped_' + file_name)
     diar_pipe.save_files(non_overlapped_diar, file_name=overlapped_file)
 
