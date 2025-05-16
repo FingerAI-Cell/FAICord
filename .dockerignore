@@ -1,0 +1,13 @@
+# 환경변수 파일 
+# .env
+
+# PostgreSQL DB 
+# ./config/db_config.json
+
+# log 파일 
+*.log
+
+# meeting records 파일 
+./dataset
+./models 
+./pretrained_models 

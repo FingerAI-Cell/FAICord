@@ -32,8 +32,11 @@ def main(args):
     
     diar_pipe.save_files(final_diar, file_name=args.file_name)
     file_name = args.file_name.split('/')[-1].split('.')[0] 
-    overlapped_file = args.file_name.replace(file_name, 'non_overlapped_' + file_name)
+    overlapped_file = args.file_name.replace(file_name, 'non_overlapped_bl' + file_name)
     diar_pipe.save_files(non_overlapped_diar, file_name=overlapped_file)
+
+    overlapped_file = args.file_name.replace(file_name, 'non_overlapped_al' + file_name)
+    diar_pipe.save_files(relabeled_diar, file_name=overlapped_file)
 
 if __name__ == '__main__':
     cli_parser = argparse.ArgumentParser()
