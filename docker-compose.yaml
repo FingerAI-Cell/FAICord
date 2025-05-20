@@ -1,0 +1,14 @@
+services:
+  app:
+    image: faicord-build
+    build:
+      context: .
+      dockerfile: Dockerfile
+      secrets:
+        - gh_token
+    secrets:
+      - gh_token
+
+secrets:
+  gh_token:
+    file: token/github_token.txt
