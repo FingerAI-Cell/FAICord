@@ -8,3 +8,4 @@
 *.rttm
 *.txt
 *.png
+./token/github_token.txt
