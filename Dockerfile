@@ -6,7 +6,7 @@ FROM python:3.12-slim-bullseye AS builder
 WORKDIR /app
 
 # 필수 도구만 설치
-RUN apt-get update && apt-get install -y --no-install-recommends python3-venv build-essential git locales ffmpeg && \
+RUN apt-get update && apt-get install -y --no-install-recommends python3-venv build-essential git locales ffmpeg wget && \
     python -m venv /opt/venv
 
 ENV PATH="/opt/venv/bin:$PATH"
@@ -29,4 +29,4 @@ WORKDIR /faicord
 COPY --from=builder /opt/venv /opt/venv
 RUN apt-get update && apt-get install -y --no-install-recommends git ffmpeg && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
-CMD ["sleep", "infinity"]
+# CMD ["sleep", "infinity"]

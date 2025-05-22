@@ -152,7 +152,7 @@ class PostProcessPipe(BasePipeline):
     def set_env(self):
         self.audio_file_processor = AudioFileProcessor()
         self.wsemb = WSEMB()
-        self.emb_model = self.wsemb.load_model()
+        self.emb_model = self.wsemb.load_model(model_path='./pretrained_models/voxceleb_resnet221_LM')
         self.emb_visualizer = EMBVisualizer()
         self.knn_cluster = KNNCluster()
 

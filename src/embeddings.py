@@ -94,8 +94,11 @@ class WSEMB(BaseEMB):
     def __init__(self):
         super().__init__()
     
-    def load_model(self, language='english'):
-        model = wespeaker.load_model(language)
+    def load_model(self, model_path=None, language='english'):
+        if model_path == None: 
+            model = wespeaker.load_model(language)
+        else:
+            model = wespeaker.load_model_local(model_path)
         return model
 
     def get_embedding(self, model, file_name):
