@@ -1,0 +1,97 @@
+'''
+non overlapepd diar result를 바탕으로, 기존 diar result를 수정함
+input
+  - non overlapped diar
+  - full diar 
+output
+  - relabeled full diar 
+'''
+
+# 01. Overlap dominant algorithm 
+# overlap domiant 알고리즘은, 겹치는 시간(duration)이 가장 긴 화자를 선택하여 라벨링
+# "누가 더 많은 부분을 차지했는가?"에 초점
+
+relabeled_full_diar = [] 
+for idx, chunk in enumerate(full_diar):
+    chunk_diar = [] 
+    for (full_start, full_end), full_label in full_diar[idx]:
+        overlap_segments = []
+        for (rel_start, rel_end), rel_label in relabeled_nonoverlap_diar[idx]:
+            overlap_start = max(full_start, rel_start)
+            overlap_end = min(full_end, rel_end)
+            overlap_duration = max(0, overlap_end - overlap_start)
+            if overlap_duration > 0:
+                overlap_segments.append((overlap_duration, rel_label))
+        if overlap_segments:
+            best_label = max(overlap_segments, key=lambda x: x[0])[1]
+        else:
+            best_label = full_label    # fallback
+        chunk_diar.append(((full_start, full_end), best_label))
+    relabeled_full_diar.append(chunk_diar)
+return relabeled_full_diar
+
+
+# 02. Early-Speaker labeling algorithm
+relabeled_full_diar = []
+for idx, chunk in enumerate(full_diar):
+    chunk_diar = []
+    for (full_start, full_end), full_label in chunk:
+        earliest_speaker = None
+        earliest_start = float('inf')
+        for (rel_start, rel_end), rel_label in relabeled_nonoverlap_diar[idx]:
+            # 겹치는 구간이 있을 때만 고려
+            overlap_start = max(full_start, rel_start)
+            overlap_end = min(full_end, rel_end)
+            if overlap_end > overlap_start:
+                # rel_start가 더 빠르면 업데이트
+                if rel_start < earliest_start:
+                    earliest_start = rel_start
+                    earliest_speaker = rel_label
+
+        if earliest_speaker is not None:
+            best_label = earliest_speaker
+        else:
+            best_label = full_label  # fallback
+        chunk_diar.append(((full_start, full_end), best_label))
+    relabeled_full_diar.append(chunk_diar)
+return relabeled_full_diar
+
+
+# 03. Early-Speaker labeling algorithm with fallback
+relabeled_full_diar = []
+for idx, chunk in enumerate(full_diar):
+    chunk_diar = []
+    for (full_start, full_end), full_label in chunk:
+        overlap_segments = []
+        earliest_speaker = None
+        earliest_start = float('inf')
+        speaker_durations = {}  # 각 speaker의 전체 발화 시간 저장
+        for (rel_start, rel_end), rel_label in relabeled_nonoverlap_diar[idx]:
+            # 겹치는 경우만 고려
+            overlap_start = max(full_start, rel_start)
+            overlap_end = min(full_end, rel_end)
+            overlap_duration = max(0, overlap_end - overlap_start)
+            if overlap_duration > 0:
+                overlap_segments.append((overlap_duration, rel_label))
+                if rel_label not in speaker_durations:
+                    speaker_durations[rel_label] = rel_end - rel_start  # 발화 길이 저장
+                if rel_start < earliest_start:
+                    earliest_start = rel_start
+                    earliest_speaker = rel_label
+
+        if earliest_speaker is not None:
+            early_duration = speaker_durations.get(earliest_speaker, 0)
+            # 가장 많이 겹친 사람 찾기
+            dominant_label = max(overlap_segments, key=lambda x: x[0])[1]
+            dominant_duration = speaker_durations.get(dominant_label, 0)
+
+            # 조건에 따라 fallback 적용
+            if dominant_label != earliest_speaker and early_duration < dominant_duration * min_ratio:
+                best_label = dominant_label
+            else:
+                best_label = earliest_speaker
+        else:
+            best_label = full_label  # 겹치는 발화가 없으면 fallback
+        chunk_diar.append(((full_start, full_end), best_label))
+    relabeled_full_diar.append(chunk_diar)
+return relabeled_full_diar
