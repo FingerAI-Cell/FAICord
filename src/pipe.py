@@ -199,14 +199,11 @@ class PostProcessPipe(BasePipeline):
             relabeled_diar_result.append(relabeled_diar)
         return relabeled_diar_result
 
-    def apply_labels_to_full_diar(self, full_diar, relabeled_nonoverlap_diar):
+    def apply_labels_to_full_diar(self, full_diar, relabeled_nonoverlap_diar, min_ratio=0.3):
         '''
         full_diar[0]: chunk 0 diar    - [((start, end), speaker), ((start, end), speaker), ... ]  
         full_diar[1]: chunk 1 diar    -                         '' 
         '''
-        # Step 1: flatten relabeled_nonoverlap_diar
-        # print(full_diar[:2], end='\n\n')
-        # print(relabeled_nonoverlap_diar[:3])
         relabeled_full_diar = [] 
         for idx, chunk in enumerate(full_diar):
             chunk_diar = [] 
@@ -221,7 +218,7 @@ class PostProcessPipe(BasePipeline):
                 if overlap_segments:
                     best_label = max(overlap_segments, key=lambda x: x[0])[1]
                 else:
-                    best_label = full_label  # fallback
+                    best_label = full_label    # fallback
                 chunk_diar.append(((full_start, full_end), best_label))
             relabeled_full_diar.append(chunk_diar)
         return relabeled_full_diar

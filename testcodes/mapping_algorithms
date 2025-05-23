@@ -7,10 +7,10 @@ output
   - relabeled full diar 
 '''
 
-# 01. Overlap dominant algorithm 
-# overlap domiant 알고리즘은, 겹치는 시간(duration)이 가장 긴 화자를 선택하여 라벨링
-# "누가 더 많은 부분을 차지했는가?"에 초점
-
+''' 01. Overlap dominant algorithm 
+overlap domiant 알고리즘은, 겹치는 시간(duration)이 가장 긴 화자를 선택하여 라벨링
+* 누가 더 많은 부분을 차지했는가? 에 초점
+'''
 relabeled_full_diar = [] 
 for idx, chunk in enumerate(full_diar):
     chunk_diar = [] 
@@ -31,7 +31,13 @@ for idx, chunk in enumerate(full_diar):
 return relabeled_full_diar
 
 
-# 02. Early-Speaker labeling algorithm
+''' 02. Early-Speaker labeling algorithm
+0~10: SPEAKER A 
+4~13: SPEAKER B 
+
+0~4: SPEAKER A 
+10~13: SPEAKER B 
+'''
 relabeled_full_diar = []
 for idx, chunk in enumerate(full_diar):
     chunk_diar = []
