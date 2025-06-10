@@ -1,11 +1,13 @@
 from speechbrain.inference.speaker import SpeakerRecognition
 from speechbrain.inference.speaker import EncoderClassifier
+from torchaudio.transforms import Resample
 from scipy.spatial.distance import cosine
 from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
-import matplotlib.pyplot as plt 
 from pydub import AudioSegment
 from io import BytesIO
+import torch.nn.functional as F
+import matplotlib.pyplot as plt 
 import seaborn as sns
 import numpy as np
 import torchaudio
@@ -35,10 +37,22 @@ class BaseEMB:
 
     def prepare_embeddings(self, embeddings):
         """
-        speechbrain_embs: list of torch.Tensor, shape (1, 1, 192)
-        wespeaker_embs: list of torch.Tensor, shape (256,)
+        embeddings: list of torch.Tensor or np.ndarray
+            - speechbrain: [torch.Tensor of shape (1, 1, 192)]
+            - wespeaker: [torch.Tensor of shape (256,)] or [np.ndarray of shape (256,)]
+        Returns:
+            np.ndarray of shape (N, D)
         """
-        return torch.stack([emb.view(-1) for emb in embeddings]).cpu().numpy() 
+        processed = []
+        for emb in embeddings:
+            if isinstance(emb, torch.Tensor):
+                emb = emb.view(-1).cpu().numpy()
+            elif isinstance(emb, np.ndarray):
+                emb = emb.reshape(-1)
+            else:
+                raise TypeError(f"[prepare_embeddings] Unsupported type: {type(emb)}")
+            processed.append(emb)
+        return np.stack(processed)
 
     def calc_similarity_matrix(self, embeddings):
         """
@@ -99,6 +113,7 @@ class WSEMB(BaseEMB):
             model = wespeaker.load_model(language)
         else:
             model = wespeaker.load_model_local(model_path)
+        model.set_device(self.device)
         return model
 
     def get_embedding(self, model, file_name):
@@ -150,6 +165,48 @@ class WSEMB(BaseEMB):
             emb_results.append(((time_s, time_e), speaker, emb))
         return emb_results
     
+    def get_embeddings_from_feask(self, model, file_name, diar_result, chunk_offset=0):
+        audio = AudioSegment.from_wav(file_name)
+        emb_results = []
+        fbanks = []
+        segments_meta = []
+
+        for (time_s, time_e), speaker in diar_result:
+            if speaker == 'filler':
+                continue
+            start_ms = int(time_s + chunk_offset) * 1000
+            end_ms = int(time_e + chunk_offset) * 1000
+            if (end_ms - start_ms) < 1000:
+                continue
+
+            # 오디오 segment → numpy array
+            segment = audio[start_ms:end_ms]
+            samples = segment.get_array_of_samples()
+            pcm = torch.tensor(samples, dtype=torch.float32) / 32768.0  # normalize
+            if segment.channels > 1:
+                pcm = pcm.reshape(-1, segment.channels).mean(dim=1)  # mono 변환
+            pcm = pcm.unsqueeze(0)  # (1, T)
+            if segment.frame_rate != model.resample_rate:
+                pcm = Resample(orig_freq=segment.frame_rate,
+                            new_freq=model.resample_rate)(pcm)
+
+            # fbank 추출 및 저장
+            fbank = model.compute_fbank(pcm, sample_rate=model.resample_rate, cmn=False)
+            fbanks.append(fbank)
+            segments_meta.append(((time_s, time_e), speaker))
+
+        max_len = max(f.shape[0] for f in fbanks)
+        fbanks_padded = [F.pad(f, (0, 0, 0, max_len - f.shape[0])) for f in fbanks]  # pad time axis
+
+        emb_array = model.extract_embedding_feats(
+            fbanks_padded,
+            batch_size=model.diar_batch_size,
+            subseg_cmn=False   # CMN에 패딩 포함 방지
+        )
+        for ((time_s, time_e), speaker), emb in zip(segments_meta, emb_array):
+            emb = emb.reshape(-1)
+            emb_results.append(((time_s, time_e), speaker, emb))
+        return emb_results
 
 class SBEMB(BaseEMB):
     def __init__(self, config):
