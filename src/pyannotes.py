@@ -229,6 +229,7 @@ class PyannotDIAR(Pyannot):
                 segments.append(segment)
         return segments
 
+
     def save_as_emb(self, embeddings, output_emb_path=None):
         import numpy as np 
         np.save(output_emb_path, embeddings)
