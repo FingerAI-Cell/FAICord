@@ -5,23 +5,28 @@ from .embeddings import SBEMB, WSEMB, EMBVisualizer
 from .clusters import KNNCluster
 from intervaltree import Interval, IntervalTree
 from scipy.spatial.distance import cosine
+from collections import defaultdict
 from abc import abstractmethod
 from pydub import AudioSegment
 from io import BytesIO
 import numpy as np
 import tempfile
-
+import torch
+import time 
 
 class BasePipeline:
-    @abstractmethod
+    def __init__(self, chunk_offset=300):
+        self.set_env()    
+        self.chunk_offset=chunk_offset
+    
     def set_env(self):
-        pass
-
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        
 
 class FrontendPipe(BasePipeline):
-    def set_env(self):
+    def __init__(self):
+        super().__init__()
         self.noise_handler = NoiseHandler()
-        self.voice_enhancer = VoiceEnhancer()
         self.audio_file_processor = AudioFileProcessor()
 
     def process_audio(self, audio_file, fade_ms=50, chunk_length=300, deverve=False):
@@ -34,7 +39,7 @@ class FrontendPipe(BasePipeline):
             chunk.export(chunk_io, format='wav')
             chunk_io.seek(0)
             denoised = self.noise_handler.denoise_audio(chunk_io)
-            print(f"[DEBUG] Denoised chunk duration: {len(chunk) / 1000} sec")
+            # print(f"[DEBUG] Denoised chunk duration: {len(chunk) / 1000} sec")
             if deverve == True:             
                 clean_chunk = self.noise_handler.deverve_audio(denoised)
                 clean_chunk.seek(0)
@@ -53,10 +58,10 @@ class FrontendPipe(BasePipeline):
 
 
 class VADPipe(BasePipeline):
-    def set_env(self, vad_config):
-        self.vad_model = PyannotVAD()
-        self.vad_config = vad_config
-        self.audio_visualizer = AudioVisualizer()
+    def __init__(self, config):
+        super().__init__()
+        self.vad_config = config 
+        self.vad_model = PyannotVAD() 
 
     def get_vad_timestamp(self, audio_file):
         vad_pipeline = self.vad_model.load_pipeline_from_pretrained(self.vad_config)
@@ -68,12 +73,11 @@ class DIARPipe(BasePipeline):
     '''
     resegment: DIAR <-> VAD mapping -> calc Non-Overlapped timeline 
     '''
-    def set_env(self, diar_config, chunk_offset=300):
-        self.diar_model = PyannotDIAR()
-        self.diar_config = diar_config 
-        self.audio_visualizer = AudioVisualizer()
+    def __init__(self, config):
+        super().__init__()
         self.audio_file_processor = AudioFileProcessor()
-        self.chunk_offset=chunk_offset
+        self.diar_model = PyannotDIAR()
+        self.diar_config = config 
         
     def get_diar(self, audio_file, num_speakers=None, return_embeddings=False):
         '''audio_file: AudioSeg'''
@@ -122,6 +126,7 @@ class DIARPipe(BasePipeline):
             vad_diar = self.apply_vad(vad_result=vad_result, diar_result=total_diar)
             vad_diar = self.diar_model.split_diar_result(vad_diar, chunk_offset=self.chunk_offset)
             filtered_diar = self.diar_model.filter_filler(vad_diar)
+            filtered_diar = self.diar_model.filter_unknown(filtered_diar)
             non_overlapped_diar = [self.diar_model.remove_overlap(diar_result) for diar_result in filtered_diar]
             return filtered_diar, non_overlapped_diar
 
@@ -129,9 +134,7 @@ class DIARPipe(BasePipeline):
         '''
         save diar result, numpy emb as rttm, npy format for each chunk
         '''
-        print(f'1: {file_name}')
         save_file_name = file_name.split('/')[-1].split('.')[0]
-        print(f'2: {save_file_name}')
         for idx, chunk_diar in enumerate(diar_result):
             if len(diar_result) > 1: 
                 save_file_name = f"chunk_{idx}_{file_name.split('/')[-1].split('.')[0]}"
@@ -144,58 +147,72 @@ class DIARPipe(BasePipeline):
 class PostProcessPipe(BasePipeline):
     '''
     filler 처리된 diar result와, non-overlapped diar 후처리하는 클래스. 
-    1. non-overlapped diar에서 화자별 임베딩 계산 
-    2. 청크 내 화자 재레이블링 (KNN)
-    3. 청크별 화자별 대표 임베딩 계산 
-    4. 청크 병합 (화자 정보 매핑)
+    1. non-overlapped diar에서 화자별 임베딩 계산 및 재레이블링 (func. relabel nonoverlapped diar)
+    2. relabeled non overlapped diar 을 이용한 full diar re-labeling (func. apply labels to full diar)
+    3. non-overlapped diar을 이용해 계산한 청크별 화자 고유 임베딩 값 -> 청크별 화자 매핑 (func. map_chunk_by_emb) 
     '''
-    def set_env(self):
-        self.audio_file_processor = AudioFileProcessor()
+    def __init__(self, chunk_offset=300):
+        super().__init__(chunk_offset)
         self.wsemb = WSEMB()
         self.emb_model = self.wsemb.load_model(model_path='./pretrained_models/voxceleb_resnet221_LM')
+        self.knn_cluster = KNNCluster() 
         self.emb_visualizer = EMBVisualizer()
-        self.knn_cluster = KNNCluster()
-
-    def prepare_nonoverlapped_labels(self, file_name, diar_result, k=5, chunk_offset=300):
+              
+    def get_chunk_emb_array(self, file_name, diar_result):
         '''
-        input: non overlapped diar result 
-        return: relabeled non overlapped diar result 
+        input:
+            file_name - audio file name 
+            diar result - diar results of audio chunk, each diar result is consists of [((start, end), speaker), ((start, end), speaker), ...]
+        output:
+            chunk emb array  - (chunk_idx, emb_array, original_labels, segment_bounds)
+                - segment_bounds: (start, end)
         '''
-        relabeled_diar_result = []
-        audio_file_name = file_name.split('/')[-1].split('.')[0]
+        chunk_outputs = []
         for idx, diar in enumerate(diar_result):
             emb_result = self.wsemb.get_embeddings_from_diar(
-                self.emb_model, file_name, diar, chunk_offset=idx*chunk_offset
+                self.emb_model, file_name, diar, chunk_offset=idx*self.chunk_offset
             )
-            emb_segment_set = set((start, end) for ((start, end), _, _) in emb_result)
-            embeddings = [emb for (_, _, emb) in emb_result]
+            emb_array = np.vstack([emb for (_, _, emb) in emb_result])
             original_labels = [speaker for (_, speaker, _) in emb_result]
-            emb_array = np.vstack(embeddings)
-            
+            segments = [(start, end) for ((start, end), _, _) in emb_result]
+            chunk_outputs.append((idx, emb_array, original_labels, segments))
+        self.chunk_emb_array = chunk_outputs 
+        return chunk_outputs    
+
+    def map_chunk_by_emb(self, diar_result, embeddings, thershold=0.65):
+        print(chunk_emb_array)
+
+    def relabel_nonoverlapped_labels(self, file_name, diar_result, k=5):
+        '''
+        input:
+            non overlapped diar result - to get speaker emb
+        return:
+            relabeled non overlapped diar result  - apply knn clustering 
+        '''
+        relabeled_diar_result = []
+        chunk_emb_data = self.get_chunk_emb_array(file_name, diar_result)
+        for (idx, emb_array, original_labels, segments) in chunk_emb_data:
             new_labels = self.knn_cluster.relabel_by_knn(emb_array, original_labels, k=k)
+            emb_segment_set = set(segments)
             emb_idx = 0
             relabeled_diar = []
-            for segment in diar:
+            for segment in diar_result[idx]:
                 (start, end), original_label = segment
                 if original_label == 'filler':
                     relabeled_diar.append(segment)
-                    print(f"[FILLER] ({start:.2f}-{end:.2f}) filler --> 유지")
-                elif (start, end) in emb_segment_set:    # 실제 embedding이 있는 경우만 new_label 적용
+                elif original_label == 'UNKNOWN':
+                    relabeled_diar.append(segment)
+                elif (start, end) in emb_segment_set:
                     new_label = new_labels[emb_idx]
                     relabeled_diar.append(((start, end), new_label))
-                    print(f"({start:.2f}-{end:.2f}) Original: {original_label} --> New: {new_label}")
                     emb_idx += 1
-                else:    # 1초 미만으로 embedding이 없었던 경우
+                else:
                     relabeled_diar.append(segment)
-                    print(f"[SHORT] ({start:.2f}-{end:.2f}) {original_label} --> 유지")
+            '''
             self.emb_visualizer.pca_and_plot(emb_array, labels=original_labels, file_path='./dataset/img/pca',
                                             title=f"Wespeaker Embeddings_{audio_file_name}_{idx} (PCA 2D)")
             self.emb_visualizer.tsne_and_plot(emb_array, labels=original_labels, file_path='./dataset/img/t-sne',
-                                            title=f"Wespeaker Embeddings_{audio_file_name}_{idx} (tsne 2D)")
-            self.emb_visualizer.pca_and_plot(emb_array, labels=new_labels, file_path='./dataset/img/pca',
-                                            title=f"Wespeaker new Embeddings_{audio_file_name}_{idx} (PCA 2D)")
-            self.emb_visualizer.tsne_and_plot(emb_array, labels=new_labels, file_path='./dataset/img/t-sne',
-                                            title=f"Wespeaker new Embeddings_{audio_file_name}_{idx} (tsne 2D)")
+                                            title=f"Wespeaker Embeddings_{audio_file_name}_{idx} (tsne 2D)")'''
             relabeled_diar_result.append(relabeled_diar)
         return relabeled_diar_result
 
@@ -204,30 +221,40 @@ class PostProcessPipe(BasePipeline):
         full_diar[0]: chunk 0 diar    - [((start, end), speaker), ((start, end), speaker), ... ]  
         full_diar[1]: chunk 1 diar    -                         '' 
         '''
-        relabeled_full_diar = [] 
+        relabeled_full_diar = []
         for idx, chunk in enumerate(full_diar):
-            chunk_diar = [] 
-            for (full_start, full_end), full_label in full_diar[idx]:
+            chunk_diar = []
+            for (full_start, full_end), full_label in chunk:
                 overlap_segments = []
+                earliest_speaker = None
+                earliest_start = float('inf')
+                speaker_durations = {}  # 각 speaker의 전체 발화 시간 저장
                 for (rel_start, rel_end), rel_label in relabeled_nonoverlap_diar[idx]:
+                    # 겹치는 경우만 고려
                     overlap_start = max(full_start, rel_start)
                     overlap_end = min(full_end, rel_end)
                     overlap_duration = max(0, overlap_end - overlap_start)
                     if overlap_duration > 0:
                         overlap_segments.append((overlap_duration, rel_label))
-                if overlap_segments:
-                    best_label = max(overlap_segments, key=lambda x: x[0])[1]
+                        if rel_label not in speaker_durations:
+                            speaker_durations[rel_label] = rel_end - rel_start  # 발화 길이 저장
+                        if rel_start < earliest_start:
+                            earliest_start = rel_start
+                            earliest_speaker = rel_label
+
+                if earliest_speaker is not None:   # 가장 많이 겹친 사람 찾기
+                    early_duration = speaker_durations.get(earliest_speaker, 0)
+                    dominant_label = max(overlap_segments, key=lambda x: x[0])[1]
+                    dominant_duration = speaker_durations.get(dominant_label, 0)
+                    if dominant_label != earliest_speaker and early_duration < dominant_duration * min_ratio:
+                        best_label = dominant_label
+                    else:
+                        best_label = earliest_speaker
                 else:
-                    best_label = full_label    # fallback
+                    best_label = full_label  # 겹치는 발화가 없으면 fallback
                 chunk_diar.append(((full_start, full_end), best_label))
             relabeled_full_diar.append(chunk_diar)
         return relabeled_full_diar
-
-    def get_speaker_vectoremb(self, diar_result, file_name):
-        '''
-        조정된 non-overlapped diar result를 입력으로 받아 기존의 diar result 수정 및 최종 화자 구분 결과 획득  
-        '''
-        pass 
 
     def calc_emb_similarity(self, emb1, emb2, model_type='sb'):
         if model_type == 'sb':   # [1, 1, 192] 
@@ -239,5 +266,3 @@ class PostProcessPipe(BasePipeline):
             emb1 = emb1.view(-1).cpu().numpy()
             emb2 = emb2.view(-1).cpu().numpy()            
             return 1 - cosine(emb1, emb2)    # cosine()은 distance니까 1 - distance
-
-     
