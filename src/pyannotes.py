@@ -197,7 +197,7 @@ class PyannotDIAR(Pyannot):
             last_time = time
         return timeline
 
-    def map_speaker_info(self, diar_results, embeddings, threshold=0.65):
+    def map_speaker_info(self, embeddings, threshold=0.65):
         '''
         청크들 간 화자 정보를 매핑해줌
         '''
