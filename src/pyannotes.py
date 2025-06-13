@@ -155,13 +155,11 @@ class PyannotDIAR(Pyannot):
             for (start, end), speaker in diar:
                 if speaker != 'filler':
                     speaker_segments[speaker].append((start, end))
-
             speakers_to_unknown = set()
             for speaker, segments in speaker_segments.items():
                 durations = [end - start for (start, end) in segments]
                 if len(segments) < min_segments or (sum(durations) / len(durations)) < min_avg_duration:
                     speakers_to_unknown.add(speaker)
-
             new_diar = []
             for (start, end), speaker in diar:
                 if speaker in speakers_to_unknown:
@@ -180,7 +178,6 @@ class PyannotDIAR(Pyannot):
         for (start, end), speaker in diar_result:
             events.append((start, 'start', speaker))
             events.append((end, 'end', speaker))
-
         events.sort()
         active_speakers = set()
         last_time = None
@@ -197,7 +194,7 @@ class PyannotDIAR(Pyannot):
             last_time = time
         return timeline
 
-    def map_speaker_info(self, embeddings, threshold=0.65):
+    def map_speaker_info(self, diar_results, embeddings, threshold=0.65):
         '''
         청크들 간 화자 정보를 매핑해줌
         '''
@@ -230,6 +227,10 @@ class PyannotDIAR(Pyannot):
         '''
         rttm: SPEAKER <file-id> <channel> <start-time> <duration> <NA> <NA> <speaker-id> <NA> <NA>
         '''
+        for item in diar_result:
+            if not (isinstance(item, tuple) and len(item) == 2 and isinstance(item[0], tuple) and len(item[0]) == 2):
+                print(f"[ERROR] Invalid diar item: {item}")
+                
         with open(output_rttm_path, "w") as f:
             for (start_time, end_time), speaker in diar_result:
                 duration = end_time - start_time
@@ -241,10 +242,10 @@ class PyannotDIAR(Pyannot):
         with open(file_path, 'r') as f:
             for line in f:
                 if line.strip() == '':
-                    continue  # 빈 줄 스킵
+                    continue 
                 parts = line.strip().split()
                 if parts[0] != "SPEAKER":
-                    continue  # 혹시 다른 타입이 있으면 스킵
+                    continue  
                 filename = parts[1]
                 start_time = float(parts[3])
                 duration = float(parts[4])
@@ -258,7 +259,6 @@ class PyannotDIAR(Pyannot):
                 }
                 segments.append(segment)
         return segments
-
 
     def save_as_emb(self, embeddings, output_emb_path=None):
         import numpy as np 
