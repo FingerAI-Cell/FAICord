@@ -126,7 +126,7 @@ class NoiseHandler:
         if audio.ndim == 1:   # mono 처리
             audio = audio[:, np.newaxis]
         audio = audio.T    # shape: (channels, samples)  : (1, 28699936) 형태.. (28699936, 1) 형태면 메모리 오류
-        print(f"[DEBUG] WPE input shape: {audio.shape}")  # (channels, samples)
+        # print(f"[DEBUG] WPE input shape: {audio.shape}")  # (channels, samples)
         deverved_audio = wpe(audio, iterations=iterations, taps=taps, delay=delay)
         deverved_audio = deverved_audio.T  # → (samples, channels)
 
