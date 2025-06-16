@@ -221,7 +221,7 @@ class PostProcessPipe(BasePipeline):
         output:
             - chunkwise_mapping: Dict of chunk_idx → local_to_global speaker label mapping
         '''
-        speaker_registry = {}  # global_label: centroid
+        speaker_registry = {}    # global_label: centroid
         chunkwise_mapping = {}
         def get_next_speaker_name():
             existing_ids = [
